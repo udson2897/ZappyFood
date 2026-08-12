@@ -1,0 +1,135 @@
+import { storage } from './storage';
+
+const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const API = `${BASE}/api`;
+
+export type Role = 'cliente' | 'lojista' | 'admin';
+
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  role: Role;
+  active_role: Role;
+};
+
+let onLogout: (() => void) | null = null;
+export const setOnLogout = (fn: () => void) => { onLogout = fn; };
+
+async function refreshTokens(): Promise<string | null> {
+  const rtok = await storage.get('refresh_token');
+  if (!rtok) return null;
+  try {
+    const r = await fetch(`${API}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: rtok }),
+    });
+    if (!r.ok) return null;
+    const data = await r.json();
+    await storage.set('access_token', data.access_token);
+    await storage.set('refresh_token', data.refresh_token);
+    return data.access_token as string;
+  } catch {
+    return null;
+  }
+}
+
+export async function apiFetch<T = any>(
+  path: string,
+  init: RequestInit = {},
+  attempt = 0,
+): Promise<T> {
+  const token = await storage.get('access_token');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(init.headers as any),
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${API}${path}`, { ...init, headers });
+  if (res.status === 401 && attempt === 0) {
+    const newTok = await refreshTokens();
+    if (newTok) return apiFetch<T>(path, init, 1);
+    if (onLogout) onLogout();
+    throw new Error('unauthorized');
+  }
+  if (!res.ok) {
+    let msg = 'Erro na requisição';
+    try {
+      const j = await res.json();
+      msg = j.detail || j.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+  if (res.status === 204) return null as any;
+  return res.json();
+}
+
+export const api = {
+  register: (body: any) =>
+    apiFetch<{ access_token: string; refresh_token: string; user: User }>(
+      '/auth/register',
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+  login: (email: string, password: string) =>
+    apiFetch<{ access_token: string; refresh_token: string; user: User }>(
+      '/auth/login',
+      { method: 'POST', body: JSON.stringify({ email, password }) },
+    ),
+  me: () => apiFetch<User>('/auth/me'),
+  switchRole: (active_role: Role) =>
+    apiFetch<User>('/auth/switch-role', {
+      method: 'POST',
+      body: JSON.stringify({ active_role }),
+    }),
+  stores: (q?: string, category?: string) => {
+    const qs = new URLSearchParams();
+    if (q) qs.set('q', q);
+    if (category) qs.set('category', category);
+    const s = qs.toString();
+    return apiFetch<any[]>(`/stores${s ? '?' + s : ''}`);
+  },
+  categories: () => apiFetch<string[]>('/stores/categories'),
+  storeDetail: (id: string) => apiFetch<any>(`/stores/${id}`),
+  myStore: () => apiFetch<any>('/my/store'),
+  saveStore: (body: any) =>
+    apiFetch<any>('/my/store', { method: 'POST', body: JSON.stringify(body) }),
+  storeStatus: (status: string) =>
+    apiFetch<any>('/my/store/status', {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+  myProducts: () => apiFetch<any[]>('/my/products'),
+  createProduct: (body: any) =>
+    apiFetch<any>('/my/products', { method: 'POST', body: JSON.stringify(body) }),
+  updateProduct: (id: string, body: any) =>
+    apiFetch<any>(`/my/products/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  deleteProduct: (id: string) =>
+    apiFetch<any>(`/my/products/${id}`, { method: 'DELETE' }),
+  createOrder: (body: any) =>
+    apiFetch<any>('/orders', { method: 'POST', body: JSON.stringify(body) }),
+  myOrders: () => apiFetch<any[]>('/orders'),
+  order: (id: string) => apiFetch<any>(`/orders/${id}`),
+  storeOrders: () => apiFetch<any[]>('/my/store/orders'),
+  updateOrderStatus: (id: string, status: string) =>
+    apiFetch<any>(`/orders/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+  rateOrder: (id: string, stars: number, comment?: string) =>
+    apiFetch<any>(`/orders/${id}/rating`, {
+      method: 'POST',
+      body: JSON.stringify({ stars, comment: comment || '' }),
+    }),
+  listChat: (oid: string) => apiFetch<any[]>(`/orders/${oid}/chat`),
+  sendChat: (oid: string, text: string) =>
+    apiFetch<any>(`/orders/${oid}/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+  dashboard: () => apiFetch<any>('/my/dashboard'),
+};

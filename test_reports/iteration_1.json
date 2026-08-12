@@ -1,0 +1,29 @@
+{
+  "summary": "ZappyFood MVP tested end-to-end. Backend: 27/27 pytest tests pass covering auth (register/login/refresh/me), stores (list/filter/detail/categories), full order flow (create → status transitions AGUARDANDO_CONFIRMACAO→ACEITO→EM_PREPARO→SAIU_PARA_ENTREGA→FINALIZADO), chat (both roles), lojista dashboard/products CRUD/store status update, and role switch. Frontend (mobile 390x844): sign-in (both demo buttons), home + category chip filter, store detail with add-to-cart, cart CTA, checkout with PIX/CARTAO/DINHEIRO selection, order confirmation redirecting to track screen with status timeline, orders list, profile with role switch, lojista dashboard metrics, queue advance button (verified state changes on backend), products list + create modal, store settings screen with status buttons + form, and chat message send from lojista side. All critical flows functional. Only warnings observed: deprecated `shadow*` style props (React Native web).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Global (react-native-web)", "issues": ["Console warning: 'shadow*' style props are deprecated. Use 'boxShadow'. Non-blocking but should be migrated for future RN versions."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "(Optional/minor) Replace deprecated shadow* style props (shadowColor, shadowOffset, shadowOpacity, shadowRadius) with boxShadow on web or keep native shadow* + use Platform.select to silence warnings.",
+    "(Nice to have) When a cliente switches to lojista via Profile, the dashboard correctly shows the 'no store yet' onboarding. Consider adding a hint that this creates a new lojista profile independent of the demo lojista account, to prevent user confusion."
+  ],
+  "critical_code_review_comments": [
+    "server.py switch_role auto-upgrades role to 'lojista' when active_role=lojista from a cliente; this is a permission escalation by design for dual-profile but should be documented; base 'role' field is never demoted back to 'cliente' after switching to lojista and back — acceptable given active_role gates UI but worth noting.",
+    "server.py order create: coupon_code path uses store_id scope but is untested (no seeded coupons); fine for MVP.",
+    "Order status transitions do not enforce order (e.g., could jump from AGUARDANDO_CONFIRMACAO directly to FINALIZADO). Not tested by playbook; acceptable but a state-machine guard would be more robust."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py", "/app/backend/tests/__init__.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None manually; backend auto-seeds 3 stores + demo users on empty DB. Test users prefixed 'TEST_' created during pytest run (register + role-switch tests).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "backend_test.py covers 27 endpoint tests via public EXPO_PUBLIC_BACKEND_URL; run with `EXPO_PUBLIC_BACKEND_URL=<url> pytest backend/tests/backend_test.py`. Frontend testIDs verified: sign-in-demo-cliente/lojista, sign-in-submit, home-categories, chip-<name>, chip-all, store-card-<id>, product-<id> (tap adds to cart), store-cart-cta, payment-PIX/CARTAO/DINHEIRO, checkout-confirm, profile-switch-role, queue-order-<id>, queue-advance-<id>, product-add-fab, lojista-chat-input/send. Route pattern: /store/{id}, /checkout, /track/{id}, /queue, /order/{id} (lojista), /products, /settings. Chat at /chat/{id} is under (customer) group.",
+  "rca_of_issue": "N/A — no functional bugs found."
+}
