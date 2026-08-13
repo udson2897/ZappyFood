@@ -25,6 +25,9 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 3 (2026-08-13)
+- [x] Acompanhamento de pedido em tempo real aprimorado: card-herói com ícone e descrição do status atual, tempo estimado de chegada (ETA) e horário previsto, barra de progresso, timeline com horário de cada etapa (recebido → aceito → em preparo → saiu para entrega → entregue), animação de pulso na etapa ativa e endereço de entrega. Atualiza automaticamente a cada 4s.
+
 ## Implemented (2026-08-12)
 ### Iter 2 (2026-08-13)
 - [x] Endereços reais: cadastro múltiplo, busca por CEP (ViaCEP), captura por GPS (expo-location), definir principal, excluir; seleção obrigatória no checkout

@@ -65,5 +65,23 @@ export const ORDER_FLOW = [
   'FINALIZADO',
 ];
 
+export const STATUS_DESC: Record<string, string> = {
+  AGUARDANDO_CONFIRMACAO: 'A loja recebeu seu pedido e vai confirmar em instantes.',
+  ACEITO: 'Pedido confirmado! A loja começará a preparar já já.',
+  EM_PREPARO: 'Sua comida está sendo preparada com carinho. 🍳',
+  SAIU_PARA_ENTREGA: 'O entregador está a caminho do seu endereço. 🛵',
+  FINALIZADO: 'Pedido entregue. Bom apetite! 🎉',
+  CANCELADO: 'Este pedido foi cancelado.',
+};
+
+export const STATUS_ICONS: Record<string, string> = {
+  AGUARDANDO_CONFIRMACAO: 'receipt-outline',
+  ACEITO: 'checkmark-circle-outline',
+  EM_PREPARO: 'restaurant-outline',
+  SAIU_PARA_ENTREGA: 'bicycle-outline',
+  FINALIZADO: 'home-outline',
+  CANCELADO: 'close-circle-outline',
+};
+
 export const brl = (v: number) =>
   `R$ ${v.toFixed(2).replace('.', ',')}`;

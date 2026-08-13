@@ -1,16 +1,28 @@
-import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Animated, Easing } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, radius, font, brl, ORDER_FLOW, STATUS_LABELS, STATUS_COLORS } from "@/src/theme";
+import {
+  colors, spacing, radius, font, brl, ORDER_FLOW, STATUS_LABELS,
+  STATUS_COLORS, STATUS_DESC, STATUS_ICONS,
+} from "@/src/theme";
 import { api } from "@/src/lib/api";
+
+function formatTime(iso: string) {
+  try {
+    return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
 
 export default function Track() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const pulse = useRef(new Animated.Value(0)).current;
 
   const load = useCallback(async () => {
     try {
@@ -23,9 +35,20 @@ export default function Track() {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 5000);
+    const t = setInterval(load, 4000);
     return () => clearInterval(t);
   }, [load]);
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [pulse]);
 
   if (loading || !order) {
     return (
@@ -37,6 +60,22 @@ export default function Track() {
 
   const currentIdx = ORDER_FLOW.indexOf(order.status);
   const cancelled = order.status === "CANCELADO";
+  const finalized = order.status === "FINALIZADO";
+  const statusColor = STATUS_COLORS[order.status] || colors.info;
+  const progress = cancelled ? 0 : (currentIdx + 1) / ORDER_FLOW.length;
+
+  // ETA calc
+  const createdMs = new Date(order.created_at).getTime();
+  const etaMs = createdMs + (order.est_delivery_min || 30) * 60000;
+  const remainingMin = Math.max(0, Math.round((etaMs - Date.now()) / 60000));
+  const etaClock = new Date(etaMs).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+  // map status -> timestamp
+  const timeFor: Record<string, string> = {};
+  for (const h of order.status_history || []) timeFor[h.status] = h.at;
+
+  const pulseScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.35] });
+  const pulseOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] });
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -51,41 +90,73 @@ export default function Track() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 80 }}>
-        <View style={styles.card}>
-          <Text style={styles.storeName}>{order.store_name}</Text>
-          <View style={[styles.pill, { backgroundColor: (STATUS_COLORS[order.status] || colors.info) + "22" }]}>
-            <Text style={[styles.pillText, { color: STATUS_COLORS[order.status] || colors.info }]}>
-              {STATUS_LABELS[order.status]}
-            </Text>
+        {/* HERO status card */}
+        <View style={[styles.hero, { backgroundColor: cancelled ? colors.error + "12" : statusColor + "14" }]} testID="track-hero">
+          <View style={styles.heroIconWrap}>
+            {!cancelled && !finalized && (
+              <Animated.View style={[styles.pulseRing, { backgroundColor: statusColor, transform: [{ scale: pulseScale }], opacity: pulseOpacity }]} />
+            )}
+            <View style={[styles.heroIcon, { backgroundColor: statusColor }]}>
+              <Ionicons name={(STATUS_ICONS[order.status] || "time-outline") as any} size={30} color="#fff" />
+            </View>
           </View>
+          <Text style={[styles.heroStatus, { color: cancelled ? colors.error : statusColor }]} testID="track-current-status">
+            {STATUS_LABELS[order.status]}
+          </Text>
+          <Text style={styles.heroDesc}>{STATUS_DESC[order.status]}</Text>
+
+          {!cancelled && !finalized && (
+            <View style={styles.etaBox} testID="track-eta">
+              <Ionicons name="time-outline" size={18} color={colors.onSurface} />
+              <Text style={styles.etaText}>
+                {remainingMin > 0 ? `Chega em ~${remainingMin} min` : "Chegando agora"} • previsão {etaClock}
+              </Text>
+            </View>
+          )}
+
+          {!cancelled && (
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${progress * 100}%`, backgroundColor: statusColor }]} />
+            </View>
+          )}
         </View>
 
+        <View style={styles.storeRow}>
+          <Ionicons name="storefront-outline" size={18} color={colors.onSurfaceSecondary} />
+          <Text style={styles.storeName}>{order.store_name}</Text>
+        </View>
+
+        {/* Timeline with timestamps */}
         {!cancelled ? (
           <View style={styles.timeline}>
             {ORDER_FLOW.map((st, idx) => {
               const done = idx <= currentIdx;
-              const active = idx === currentIdx;
+              const active = idx === currentIdx && !finalized;
+              const ts = timeFor[st];
               return (
-                <View key={st} style={styles.step}>
+                <View key={st} style={styles.step} testID={`track-step-${st}`}>
                   <View style={styles.stepLeft}>
                     <View
                       style={[
                         styles.dot,
-                        done && { backgroundColor: colors.brand, borderColor: colors.brand },
+                        done && { backgroundColor: statusColor, borderColor: statusColor },
                         active && { transform: [{ scale: 1.15 }] },
                       ]}
                     >
-                      {done && <Ionicons name="checkmark" size={14} color="#fff" />}
+                      {done ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
                     </View>
                     {idx < ORDER_FLOW.length - 1 && (
-                      <View style={[styles.stepLine, done && { backgroundColor: colors.brand }]} />
+                      <View style={[styles.stepLine, done && { backgroundColor: statusColor }]} />
                     )}
                   </View>
-                  <View style={{ flex: 1, paddingBottom: spacing.md }}>
-                    <Text style={[styles.stepLabel, done && { color: colors.onSurface, fontWeight: "700" }]}>
-                      {STATUS_LABELS[st]}
-                    </Text>
-                    {active && <Text style={styles.stepHint}>Em andamento agora</Text>}
+                  <View style={{ flex: 1, paddingBottom: spacing.lg }}>
+                    <View style={styles.stepHeadRow}>
+                      <Text style={[styles.stepLabel, done && { color: colors.onSurface, fontWeight: "700" }]}>
+                        {STATUS_LABELS[st]}
+                      </Text>
+                      {ts ? <Text style={styles.stepTime}>{formatTime(ts)}</Text> : null}
+                    </View>
+                    {active && <Text style={styles.stepHint}>{STATUS_DESC[st]}</Text>}
                   </View>
                 </View>
               );
@@ -95,6 +166,7 @@ export default function Track() {
           <View style={styles.cancelBox}>
             <Ionicons name="close-circle" size={40} color={colors.error} />
             <Text style={styles.cancelText}>Pedido cancelado</Text>
+            {timeFor["CANCELADO"] ? <Text style={styles.stepTime}>{formatTime(timeFor["CANCELADO"])}</Text> : null}
           </View>
         )}
 
@@ -124,20 +196,27 @@ export default function Track() {
           )}
         </View>
 
+        {order.address && (
+          <View style={styles.addrCard}>
+            <Ionicons name="location" size={18} color={colors.brand} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.addrLabel}>Entregar em {order.address.label}</Text>
+              <Text style={styles.addrText}>{order.address.street}, {order.address.number} - {order.address.city}/{order.address.state}</Text>
+            </View>
+          </View>
+        )}
+
         {order.status === "AGUARDANDO_CONFIRMACAO" && (
           <Pressable
             testID="track-cancel"
             style={styles.cancelBtn}
-            onPress={async () => {
-              await api.updateOrderStatus(order.id, "CANCELADO");
-              load();
-            }}
+            onPress={async () => { await api.updateOrderStatus(order.id, "CANCELADO"); load(); }}
           >
             <Text style={styles.cancelBtnText}>Cancelar pedido</Text>
           </Pressable>
         )}
 
-        {order.status === "FINALIZADO" && !order.rating && (
+        {finalized && !order.rating && (
           <View style={styles.ratingBox}>
             <Text style={styles.ratingTitle}>Como foi seu pedido?</Text>
             <View style={{ flexDirection: "row", gap: spacing.sm, justifyContent: "center", marginTop: spacing.md }}>
@@ -171,21 +250,27 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: colors.divider,
   },
   title: { fontSize: font.size.lg, fontWeight: "700", color: colors.onSurface },
-  card: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.lg },
-  storeName: { fontSize: font.size.xl, fontWeight: "800", color: colors.onSurface },
-  pill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.pill },
-  pillText: { fontWeight: "700", fontSize: font.size.sm },
-  timeline: { marginVertical: spacing.md },
+  hero: { borderRadius: radius.lg, padding: spacing.xl, alignItems: "center", marginBottom: spacing.lg },
+  heroIconWrap: { width: 64, height: 64, alignItems: "center", justifyContent: "center", marginBottom: spacing.md },
+  pulseRing: { position: "absolute", width: 60, height: 60, borderRadius: 30 },
+  heroIcon: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center" },
+  heroStatus: { fontSize: font.size.xl, fontWeight: "800" },
+  heroDesc: { color: colors.onSurfaceSecondary, textAlign: "center", marginTop: spacing.xs, fontSize: font.size.base },
+  etaBox: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.surface, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, marginTop: spacing.md },
+  etaText: { color: colors.onSurface, fontWeight: "600", fontSize: font.size.sm },
+  progressTrack: { width: "100%", height: 6, borderRadius: 3, backgroundColor: colors.surface, marginTop: spacing.lg, overflow: "hidden" },
+  progressFill: { height: 6, borderRadius: 3 },
+  storeRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.md },
+  storeName: { fontSize: font.size.lg, fontWeight: "700", color: colors.onSurface },
+  timeline: { marginVertical: spacing.xs },
   step: { flexDirection: "row", gap: spacing.md },
   stepLeft: { alignItems: "center", width: 24 },
-  dot: {
-    width: 22, height: 22, borderRadius: 11,
-    borderWidth: 2, borderColor: colors.borderStrong,
-    backgroundColor: colors.surface, alignItems: "center", justifyContent: "center",
-  },
+  dot: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.borderStrong, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
   stepLine: { width: 2, flex: 1, backgroundColor: colors.borderStrong, minHeight: 24 },
+  stepHeadRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   stepLabel: { color: colors.onSurfaceSecondary, fontSize: font.size.lg },
-  stepHint: { color: colors.brand, fontSize: font.size.sm, marginTop: 2 },
+  stepTime: { color: colors.onSurfaceTertiary, fontSize: font.size.sm, fontWeight: "600" },
+  stepHint: { color: colors.onSurfaceSecondary, fontSize: font.size.sm, marginTop: 2 },
   cancelBox: { alignItems: "center", padding: spacing.xl, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, marginBottom: spacing.lg },
   cancelText: { color: colors.error, fontWeight: "700", marginTop: spacing.sm, fontSize: font.size.lg },
   itemsCard: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.lg, marginTop: spacing.md },
@@ -195,12 +280,15 @@ const styles = StyleSheet.create({
   itemName: { flex: 1, color: colors.onSurface },
   itemOptions: { color: colors.onSurfaceTertiary, fontSize: font.size.sm, marginTop: 2 },
   itemPrice: { color: colors.onSurface, fontWeight: "600" },
-  earnedText: { color: colors.success, fontWeight: "700", marginTop: spacing.sm },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.sm },
   sumRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
   sumLabel: { color: colors.onSurfaceSecondary },
   sumValue: { color: colors.onSurface, fontWeight: "600" },
   paymentText: { color: colors.onSurfaceSecondary, marginTop: spacing.sm },
+  earnedText: { color: colors.success, fontWeight: "700", marginTop: spacing.sm },
+  addrCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.md },
+  addrLabel: { fontWeight: "700", color: colors.onSurface },
+  addrText: { color: colors.onSurfaceSecondary, marginTop: 2, fontSize: font.size.sm },
   cancelBtn: { marginTop: spacing.lg, borderWidth: 1, borderColor: colors.error, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: "center" },
   cancelBtnText: { color: colors.error, fontWeight: "700" },
   ratingBox: { marginTop: spacing.xl, backgroundColor: colors.brandTertiary, borderRadius: radius.md, padding: spacing.lg },

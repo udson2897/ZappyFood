@@ -525,6 +525,7 @@ async def create_order(data: OrderCreateIn, user=Depends(current_user)):
         "customer_name": user["name"],
         "store_id": store["id"],
         "store_name": store["fantasy_name"],
+        "est_delivery_min": store.get("est_delivery_min", 30),
         "items": items_snapshot,
         "subtotal": round(subtotal, 2),
         "delivery_fee": round(delivery_fee, 2),
