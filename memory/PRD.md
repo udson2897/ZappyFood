@@ -25,6 +25,11 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 6 (2026-08-13)
+- [x] Confirmação de recebimento pelo cliente: quando o pedido está "Saiu para entrega", o cliente vê o botão "Confirmar recebimento" na tela de acompanhamento; ao tocar, o status vira "Entregue", os pontos são creditados e o lojista recebe a notificação "X confirmou o recebimento".
+- [x] Auto-finalização: tarefa em background (roda a cada 60s) que marca automaticamente como "Entregue" pedidos em "Saiu para entrega" que passaram de 30 min do horário previsto de entrega (created_at + est_delivery_min + 30min), creditando pontos e avisando o lojista. Registrado no histórico com flag auto=true.
+- [x] Permissões: cliente só pode confirmar quando status == SAIU_PARA_ENTREGA (bloqueado 403 caso contrário).
+
 ### Iter 5 (2026-08-13)
 - [x] Faixas de distância: lojista pode escolher modo "valor por km" ou "faixas" (ex: 0-2km=R$5, 2-5km=R$8, 5-8km=R$12); editor de faixas nas configurações; quote e criação de pedido respeitam o modo escolhido.
 - [x] Cupons/promoções por produto: tela "Cupons / Promoções" (via painel do lojista) onde o lojista escolhe o produto e define o desconto em R$; cliente vê preço antigo riscado + preço promocional + selo PROMO; pedido usa o preço com desconto.

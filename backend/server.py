@@ -1,6 +1,7 @@
 """ZappyFood backend - FastAPI + Motor (MongoDB)"""
 import os
 import uuid
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -585,6 +586,48 @@ STATUS_NOTIFY = {
 }
 
 
+async def apply_status_change(oid: str, order: dict, new_status: str,
+                              store: dict = None, confirmed_by_customer: bool = False,
+                              auto: bool = False):
+    """Aplica mudança de status: grava histórico, pontos de fidelidade e notificações.
+    Reutilizado pela rota manual e pela tarefa de auto-finalização."""
+    entry = {"status": new_status, "at": now_utc().isoformat()}
+    if auto:
+        entry["auto"] = True
+    await db.orders.update_one(
+        {"id": oid},
+        {"$set": {"status": new_status}, "$push": {"status_history": entry}},
+    )
+    # Loyalty side-effects
+    if new_status == "FINALIZADO" and not order.get("points_credited"):
+        earned = int(order["total"])  # R$1 = 1 ponto
+        if earned > 0:
+            await db.users.update_one({"id": order["customer_id"]}, {"$inc": {"loyalty_points": earned}})
+        await db.orders.update_one({"id": oid}, {"$set": {"points_credited": True, "points_earned": earned}})
+    if new_status == "CANCELADO" and order.get("points_redeemed", 0) > 0 and not order.get("points_refunded"):
+        await db.users.update_one({"id": order["customer_id"]}, {"$inc": {"loyalty_points": order["points_redeemed"]}})
+        await db.orders.update_one({"id": oid}, {"$set": {"points_refunded": True}})
+    # Notify the customer about the status change
+    notify = STATUS_NOTIFY.get(new_status)
+    if notify:
+        title, body = notify
+        if new_status == "FINALIZADO" and auto:
+            body = "Confirmamos a entrega automaticamente. Bom apetite!"
+        await push_notification(order["customer_id"], f"{order['store_name']}: {title}", body, oid, "status")
+    # Notify the store owner when delivered
+    if new_status == "FINALIZADO":
+        if store is None:
+            store = await db.stores.find_one({"id": order["store_id"]})
+        if store:
+            if auto:
+                body = f"Pedido de {order['customer_name']} finalizado automaticamente (sem confirmação em 30 min)."
+            elif confirmed_by_customer:
+                body = f"{order['customer_name']} confirmou o recebimento do pedido."
+            else:
+                body = f"Pedido de {order['customer_name']} finalizado."
+            await push_notification(store["owner_id"], "Pedido entregue ✅", body, oid, "delivered")
+
+
 def now_utc_helpers_marker():
     pass
 
@@ -737,34 +780,19 @@ async def update_order_status(oid: str, data: OrderStatusIn, user=Depends(curren
     if not order:
         raise HTTPException(404, "Pedido não encontrado")
     store = await db.stores.find_one({"id": order["store_id"]})
-    # store owner or customer (customer can only cancel while AGUARDANDO)
     is_owner = store and store["owner_id"] == user["id"]
     is_customer = order["customer_id"] == user["id"]
+    confirmed_by_customer = False
     if data.status == "CANCELADO":
         if not (is_owner or (is_customer and order["status"] == "AGUARDANDO_CONFIRMACAO")):
             raise HTTPException(403, "Não permitido")
-    else:
-        if not is_owner:
-            raise HTTPException(403, "Apenas lojista")
-    entry = {"status": data.status, "at": now_utc().isoformat()}
-    await db.orders.update_one(
-        {"id": oid},
-        {"$set": {"status": data.status}, "$push": {"status_history": entry}},
-    )
-    # Loyalty side-effects
-    if data.status == "FINALIZADO" and not order.get("points_credited"):
-        earned = int(order["total"])  # R$1 = 1 ponto
-        if earned > 0:
-            await db.users.update_one({"id": order["customer_id"]}, {"$inc": {"loyalty_points": earned}})
-        await db.orders.update_one({"id": oid}, {"$set": {"points_credited": True, "points_earned": earned}})
-    if data.status == "CANCELADO" and order.get("points_redeemed", 0) > 0 and not order.get("points_refunded"):
-        await db.users.update_one({"id": order["customer_id"]}, {"$inc": {"loyalty_points": order["points_redeemed"]}})
-        await db.orders.update_one({"id": oid}, {"$set": {"points_refunded": True}})
-    # Notify the customer about the status change
-    notify = STATUS_NOTIFY.get(data.status)
-    if notify:
-        title, body = notify
-        await push_notification(order["customer_id"], f"{order['store_name']}: {title}", body, oid, "status")
+    elif data.status == "FINALIZADO" and is_customer and order["status"] == "SAIU_PARA_ENTREGA":
+        # Cliente confirma o recebimento do pedido
+        confirmed_by_customer = True
+    elif not is_owner:
+        raise HTTPException(403, "Apenas lojista")
+    await apply_status_change(oid, order, data.status, store=store,
+                              confirmed_by_customer=confirmed_by_customer)
     return await db.orders.find_one({"id": oid}, {"_id": 0})
 
 
@@ -1036,10 +1064,38 @@ async def seed_data():
     log.info("Seed complete")
 
 
+AUTO_FINALIZE_AFTER_MIN = 30  # minutos após o horário previsto de entrega
+
+
+async def auto_finalize_loop():
+    """Finaliza automaticamente pedidos 'SAIU_PARA_ENTREGA' que passaram
+    de 30 min do horário previsto de entrega sem confirmação do cliente."""
+    while True:
+        try:
+            now = now_utc()
+            pending = await db.orders.find({"status": "SAIU_PARA_ENTREGA"}, {"_id": 0}).to_list(500)
+            for order in pending:
+                try:
+                    created = datetime.fromisoformat(order["created_at"])
+                    if created.tzinfo is None:
+                        created = created.replace(tzinfo=timezone.utc)
+                    eta = created + timedelta(minutes=order.get("est_delivery_min", 30))
+                    cutoff = eta + timedelta(minutes=AUTO_FINALIZE_AFTER_MIN)
+                    if now >= cutoff:
+                        await apply_status_change(order["id"], order, "FINALIZADO", auto=True)
+                        log.info(f"Auto-finalizado pedido {order['id']}")
+                except Exception as e:
+                    log.error(f"auto_finalize erro no pedido {order.get('id')}: {e}")
+        except Exception as e:
+            log.error(f"auto_finalize_loop erro: {e}")
+        await asyncio.sleep(60)
+
+
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
     await seed_data()
+    asyncio.create_task(auto_finalize_loop())
 
 
 @app.on_event("shutdown")

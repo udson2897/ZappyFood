@@ -22,6 +22,7 @@ export default function Track() {
   const router = useRouter();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [confirming, setConfirming] = useState(false);
   const pulse = useRef(new Animated.Value(0)).current;
 
   const load = useCallback(async () => {
@@ -206,6 +207,38 @@ export default function Track() {
           </View>
         )}
 
+        {order.status === "SAIU_PARA_ENTREGA" && (
+          <View style={styles.confirmCard} testID="track-confirm-card">
+            <Text style={styles.confirmTitle}>Chegou o seu pedido?</Text>
+            <Text style={styles.confirmHint}>
+              Toque abaixo quando receber. Se você não confirmar, marcaremos como entregue automaticamente 30 min após a previsão.
+            </Text>
+            <Pressable
+              testID="track-confirm-receipt"
+              style={styles.confirmBtn}
+              disabled={confirming}
+              onPress={async () => {
+                setConfirming(true);
+                try {
+                  await api.updateOrderStatus(order.id, "FINALIZADO");
+                  await load();
+                } finally {
+                  setConfirming(false);
+                }
+              }}
+            >
+              {confirming ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                  <Text style={styles.confirmBtnText}>Confirmar recebimento</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        )}
+
         {order.status === "AGUARDANDO_CONFIRMACAO" && (
           <Pressable
             testID="track-cancel"
@@ -291,6 +324,11 @@ const styles = StyleSheet.create({
   addrText: { color: colors.onSurfaceSecondary, marginTop: 2, fontSize: font.size.sm },
   cancelBtn: { marginTop: spacing.lg, borderWidth: 1, borderColor: colors.error, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: "center" },
   cancelBtnText: { color: colors.error, fontWeight: "700" },
+  confirmCard: { marginTop: spacing.lg, backgroundColor: colors.brandTertiary, borderRadius: radius.md, padding: spacing.lg, borderWidth: 1, borderColor: colors.brandSecondary },
+  confirmTitle: { fontSize: font.size.lg, fontWeight: "800", color: colors.onSurface },
+  confirmHint: { color: colors.onSurfaceSecondary, marginTop: spacing.xs, fontSize: font.size.sm },
+  confirmBtn: { flexDirection: "row", gap: spacing.sm, alignItems: "center", justifyContent: "center", backgroundColor: colors.success, borderRadius: radius.md, paddingVertical: spacing.md, marginTop: spacing.md },
+  confirmBtnText: { color: "#fff", fontWeight: "800", fontSize: font.size.lg },
   ratingBox: { marginTop: spacing.xl, backgroundColor: colors.brandTertiary, borderRadius: radius.md, padding: spacing.lg },
   ratingTitle: { textAlign: "center", fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg },
 });
