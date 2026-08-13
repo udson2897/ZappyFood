@@ -40,6 +40,65 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+import math
+
+ROAD_FACTOR = 1.3  # aproxima distância de rota a partir da linha reta
+
+
+def haversine_km(lat1, lng1, lat2, lng2) -> float:
+    R = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlmb = math.radians(lng2 - lng1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlmb / 2) ** 2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def compute_delivery_quote(store: dict, addr: Optional[dict], subtotal: float = 0.0) -> dict:
+    """Retorna taxa de entrega automática por distância.
+    Fórmula: taxa = max(taxa_mínima, taxa_base + km * valor_por_km).
+    Aplica raio de atendimento e frete grátis acima de X.
+    Se faltarem coordenadas, usa taxa base (não é possível medir distância)."""
+    base = store.get("base_delivery_fee", store.get("delivery_fee", 5.0) or 5.0)
+    per_km = store.get("price_per_km", 1.5)
+    min_fee = store.get("min_delivery_fee", base)
+    max_radius = store.get("max_radius_km", 8.0)
+    free_above = store.get("free_above", 0.0) or 0.0
+    est = store.get("est_delivery_min", 30)
+
+    s_lat, s_lng = store.get("lat"), store.get("lng")
+    a_lat = addr.get("lat") if addr else None
+    a_lng = addr.get("lng") if addr else None
+
+    if s_lat is None or s_lng is None or a_lat is None or a_lng is None:
+        # sem coordenadas -> taxa base, entregável
+        fee = round(max(min_fee, base), 2)
+        if free_above and subtotal >= free_above:
+            fee = 0.0
+        return {
+            "distance_km": None, "fee": fee, "deliverable": True,
+            "eta_min": est, "reason": "Taxa base (distância indisponível)",
+            "max_radius_km": max_radius,
+        }
+
+    dist = round(haversine_km(s_lat, s_lng, a_lat, a_lng) * ROAD_FACTOR, 2)
+    deliverable = dist <= max_radius
+    fee = round(max(min_fee, base + per_km * dist), 2)
+    free = bool(free_above and subtotal >= free_above)
+    if free:
+        fee = 0.0
+    eta = int(est + round(dist * 3))  # ~3 min por km
+    reason = None
+    if not deliverable:
+        reason = f"Fora do raio de atendimento ({max_radius:.0f} km)"
+    elif free:
+        reason = "Frete grátis"
+    return {
+        "distance_km": dist, "fee": fee, "deliverable": deliverable,
+        "eta_min": eta, "reason": reason, "max_radius_km": max_radius,
+    }
+
+
 def hash_password(pw: str) -> str:
     if len(pw.encode()) > 72:
         raise HTTPException(422, "Senha muito longa")
@@ -158,10 +217,18 @@ class StoreIn(BaseModel):
     description: Optional[str] = ""
     logo_url: Optional[str] = ""
     banner_url: Optional[str] = ""
-    delivery_fee: float = 0.0
+    delivery_fee: float = 0.0          # legacy/fallback
     min_order: float = 0.0
     est_delivery_min: int = 30
     address: Optional[dict] = None
+    # Distance-based delivery pricing
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    base_delivery_fee: float = 5.0     # taxa base
+    price_per_km: float = 1.5          # valor por km
+    min_delivery_fee: float = 5.0      # taxa mínima
+    max_radius_km: float = 8.0         # raio de atendimento
+    free_above: float = 0.0            # frete grátis acima de (0 = desativado)
 
 
 class StoreStatusIn(BaseModel):
@@ -346,6 +413,28 @@ async def delete_address(aid: str, user=Depends(current_user)):
     return {"ok": True}
 
 
+class QuoteIn(BaseModel):
+    store_id: str
+    address_id: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    subtotal: float = 0.0
+
+
+@api.post("/delivery/quote")
+async def delivery_quote(data: QuoteIn, user=Depends(current_user)):
+    store = await db.stores.find_one({"id": data.store_id}, {"_id": 0})
+    if not store:
+        raise HTTPException(404, "Loja não encontrada")
+    addr = None
+    if data.address_id:
+        addr = await db.addresses.find_one({"id": data.address_id, "user_id": user["id"]}, {"_id": 0})
+    elif data.lat is not None and data.lng is not None:
+        addr = {"lat": data.lat, "lng": data.lng}
+    q = compute_delivery_quote(store, addr, data.subtotal)
+    return q
+
+
 # ============== Store Routes ==============
 @api.get("/stores")
 async def list_stores(q: Optional[str] = None, category: Optional[str] = None):
@@ -497,7 +586,16 @@ async def create_order(data: OrderCreateIn, user=Depends(current_user)):
             "options": option_labels,
             "variations": it.variations or {}, "addons": it.addons or [],
         })
-    delivery_fee = store.get("delivery_fee", 0.0)
+    # Endereço de entrega + taxa automática por distância
+    addr = None
+    if data.address_id:
+        addr = await db.addresses.find_one({"id": data.address_id, "user_id": user["id"]}, {"_id": 0})
+    quote = compute_delivery_quote(store, addr, subtotal)
+    if not quote["deliverable"]:
+        raise HTTPException(400, quote.get("reason") or "Endereço fora da área de entrega")
+    delivery_fee = quote["fee"]
+    est_delivery_min = quote["eta_min"]
+    distance_km = quote["distance_km"]
     discount = 0.0
     if data.coupon_code:
         coupon = await db.coupons.find_one({"code": data.coupon_code.upper(), "store_id": store["id"]})
@@ -525,7 +623,8 @@ async def create_order(data: OrderCreateIn, user=Depends(current_user)):
         "customer_name": user["name"],
         "store_id": store["id"],
         "store_name": store["fantasy_name"],
-        "est_delivery_min": store.get("est_delivery_min", 30),
+        "est_delivery_min": est_delivery_min,
+        "distance_km": distance_km,
         "items": items_snapshot,
         "subtotal": round(subtotal, 2),
         "delivery_fee": round(delivery_fee, 2),
@@ -536,16 +635,13 @@ async def create_order(data: OrderCreateIn, user=Depends(current_user)):
         "payment_method": data.payment_method,
         "notes": data.notes or "",
         "address_id": data.address_id,
+        "address": addr,
         "status": "AGUARDANDO_CONFIRMACAO",
         "status_history": [{"status": "AGUARDANDO_CONFIRMACAO", "at": now_utc().isoformat()}],
         "points_credited": False,
         "points_refunded": False,
         "created_at": now_utc().isoformat(),
     }
-    # attach address snapshot
-    if data.address_id:
-        addr = await db.addresses.find_one({"id": data.address_id, "user_id": user["id"]}, {"_id": 0})
-        order["address"] = addr
     # reserve redeemed points now
     if redeem > 0:
         await db.users.update_one({"id": user["id"]}, {"$inc": {"loyalty_points": -redeem}})
@@ -694,6 +790,7 @@ DEMO_STORES = [
         "banner_url": "https://images.unsplash.com/photo-1667329829058-ac191ba4a905?w=1200&q=80",
         "logo_url": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200&q=80",
         "delivery_fee": 6.90, "min_order": 20.0, "est_delivery_min": 35, "rating": 4.8,
+        "lat": -23.5505, "lng": -46.6333,
         "products": [
             ("X-Burger Clássico", "Pão, hambúrguer 150g, queijo, alface, tomate", 24.90,
              "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&q=80", "Lanches"),
@@ -712,6 +809,7 @@ DEMO_STORES = [
         "banner_url": "https://images.unsplash.com/photo-1576458088443-04a19bb13da6?w=1200&q=80",
         "logo_url": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=200&q=80",
         "delivery_fee": 8.00, "min_order": 30.0, "est_delivery_min": 45, "rating": 4.7,
+        "lat": -23.5629, "lng": -46.6544,
         "products": [
             ("Margherita", "Molho, muçarela, manjericão", 49.90,
              "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=600&q=80", "Pizzas"),
@@ -728,6 +826,7 @@ DEMO_STORES = [
         "banner_url": "https://images.unsplash.com/photo-1654923064926-be7e64267a31?w=1200&q=80",
         "logo_url": "https://images.unsplash.com/photo-1590301157890-4810ed352733?w=200&q=80",
         "delivery_fee": 5.00, "min_order": 15.0, "est_delivery_min": 25, "rating": 4.9,
+        "lat": -23.5475, "lng": -46.6361,
         "products": [
             ("Açaí 500ml", "Açaí puro + 3 acompanhamentos", 22.90,
              "https://images.unsplash.com/photo-1590301157890-4810ed352733?w=600&q=80", "Açaí"),
@@ -811,6 +910,9 @@ async def seed_data():
             "min_order": s["min_order"], "est_delivery_min": s["est_delivery_min"],
             "rating": s["rating"], "num_reviews": 42,
             "status": "ABERTA", "phone": "1130000000",
+            "lat": s["lat"], "lng": s["lng"],
+            "base_delivery_fee": s["delivery_fee"], "price_per_km": 1.5,
+            "min_delivery_fee": s["delivery_fee"], "max_radius_km": 8.0, "free_above": 0.0,
             "subscription": {"plan": "monthly", "status": "ATIVA"},
             "created_at": now_utc().isoformat(),
         })
@@ -826,8 +928,9 @@ async def seed_data():
                 "created_at": now_utc().isoformat(),
             })
     # Demo cliente (com pontos de fidelidade para testar resgate)
+    cliente_id = str(uuid.uuid4())
     await db.users.insert_one({
-        "id": str(uuid.uuid4()),
+        "id": cliente_id,
         "name": "Demo Cliente",
         "email": "cliente@zappyfood.com",
         "phone": "11988888888",
@@ -835,6 +938,14 @@ async def seed_data():
         "role": "cliente",
         "active_role": "cliente",
         "loyalty_points": 150,
+        "created_at": now_utc().isoformat(),
+    })
+    # Endereço padrão do cliente (~2 km das lojas) para demonstrar taxa por distância
+    await db.addresses.insert_one({
+        "id": str(uuid.uuid4()), "user_id": cliente_id, "label": "Casa",
+        "street": "Av. Paulista", "number": "1000", "complement": "Apto 52",
+        "neighborhood": "Bela Vista", "city": "São Paulo", "state": "SP", "zip": "01310100",
+        "lat": -23.5614, "lng": -46.6559, "is_default": True,
         "created_at": now_utc().isoformat(),
     })
     log.info("Seed complete")

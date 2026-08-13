@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, TextInput, Switch,
 } from "react-native";
@@ -28,7 +28,8 @@ export default function Checkout() {
   const [selectedAddr, setSelectedAddr] = useState<string | null>(null);
   const [points, setPoints] = useState(0);
   const [usePoints, setUsePoints] = useState(false);
-  const [deliveryFee, setDeliveryFee] = useState(0);
+  const [quote, setQuote] = useState<{ distance_km: number | null; fee: number; deliverable: boolean; reason: string | null; eta_min: number } | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     const [addr, loy] = await Promise.all([api.addresses(), api.loyalty()]);
@@ -36,15 +37,24 @@ export default function Checkout() {
     setPoints(loy.points);
     const def = addr.find((a: any) => a.is_default) || addr[0];
     if (def && !selectedAddr) setSelectedAddr(def.id);
-    if (storeId) {
-      try {
-        const s = await api.storeDetail(storeId);
-        setDeliveryFee(s.delivery_fee || 0);
-      } catch {}
-    }
-  }, [selectedAddr, storeId]);
+  }, [selectedAddr]);
 
   useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
+
+  // Taxa de entrega automática por distância
+  useEffect(() => {
+    if (!storeId || !selectedAddr || count === 0) { setQuote(null); return; }
+    let active = true;
+    setQuoteLoading(true);
+    api.deliveryQuote(storeId, selectedAddr, subtotal)
+      .then((q) => { if (active) setQuote(q); })
+      .catch(() => { if (active) setQuote(null); })
+      .finally(() => { if (active) setQuoteLoading(false); });
+    return () => { active = false; };
+  }, [storeId, selectedAddr, subtotal, count]);
+
+  const deliveryFee = quote?.fee ?? 0;
+  const deliverable = quote?.deliverable ?? true;
 
   const baseTotal = subtotal + (count > 0 ? deliveryFee : 0);
   // 100 points = R$10 -> 1 point = R$0.10. Cap redemption to baseTotal.
@@ -211,18 +221,40 @@ export default function Checkout() {
 
         <View style={styles.summary}>
           <SumRow label="Subtotal" value={brl(subtotal)} />
-          <SumRow label="Taxa de entrega" value={brl(deliveryFee)} />
+          <SumRow
+            label={quote?.distance_km != null ? `Taxa de entrega (${quote.distance_km.toFixed(1)} km)` : "Taxa de entrega"}
+            value={quoteLoading ? "calculando..." : brl(deliveryFee)}
+          />
+          {quote && quote.deliverable && (
+            <Text style={styles.etaHint}>Entrega em ~{quote.eta_min} min • taxa calculada pela distância</Text>
+          )}
           {redeemPoints > 0 && <SumRow label={`Desconto (${redeemPoints} pts)`} value={`- ${brl(pointsDiscount)}`} />}
           <View style={styles.divider} />
           <SumRow label="Total" value={brl(total)} bold />
         </View>
 
+        {quote && !quote.deliverable && (
+          <View style={styles.outOfRange} testID="checkout-out-of-range">
+            <Ionicons name="alert-circle" size={18} color={colors.error} />
+            <Text style={styles.outOfRangeText}>{quote.reason || "Endereço fora da área de entrega desta loja"}</Text>
+          </View>
+        )}
+
         {error && <Text style={styles.error} testID="checkout-error">{error}</Text>}
       </ScrollView>
 
       <View style={styles.footer}>
-        <Pressable testID="checkout-confirm" style={styles.confirmBtn} disabled={placing} onPress={placeOrder}>
-          {placing ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmText}>Confirmar pedido • {brl(total)}</Text>}
+        <Pressable
+          testID="checkout-confirm"
+          style={[styles.confirmBtn, (placing || !deliverable) && { opacity: 0.5 }]}
+          disabled={placing || !deliverable}
+          onPress={placeOrder}
+        >
+          {placing ? <ActivityIndicator color="#fff" /> : (
+            <Text style={styles.confirmText}>
+              {deliverable ? `Confirmar pedido • ${brl(total)}` : "Fora da área de entrega"}
+            </Text>
+          )}
         </Pressable>
       </View>
     </SafeAreaView>
@@ -271,6 +303,9 @@ const styles = StyleSheet.create({
   notesInput: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, minHeight: 80, textAlignVertical: "top", color: colors.onSurface },
   summary: { marginTop: spacing.xl, padding: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.sm },
+  etaHint: { color: colors.onSurfaceSecondary, fontSize: font.size.sm, marginTop: 2 },
+  outOfRange: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.error + "12" },
+  outOfRangeText: { flex: 1, color: colors.error, fontWeight: "600" },
   error: { color: colors.error, marginTop: spacing.md, textAlign: "center" },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: spacing.lg, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.divider },
   confirmBtn: { backgroundColor: colors.brand, borderRadius: radius.md, paddingVertical: spacing.lg, alignItems: "center" },

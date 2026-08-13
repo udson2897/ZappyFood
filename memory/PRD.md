@@ -25,6 +25,9 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 4 (2026-08-13)
+- [x] Taxa de entrega automática por distância (modelo iFood/Uber Eats): `taxa = máx(taxa_mínima, taxa_base + km × valor_por_km)`, distância por Haversine × fator de rota 1.3 entre coordenadas da loja e do endereço do cliente. Respeita raio de atendimento (bloqueia pedidos fora da área com HTTP 400) e frete grátis acima de X. Endpoint POST /api/delivery/quote para prévia ao vivo no checkout; cálculo autoritativo no servidor ao criar pedido. Lojista configura taxa base, valor/km, raio e localização (GPS) nas configurações da loja. Endereços do cliente capturam lat/lng via GPS, BrasilAPI CEP v2 e geocoding.
+
 ### Iter 3 (2026-08-13)
 - [x] Acompanhamento de pedido em tempo real aprimorado: card-herói com ícone e descrição do status atual, tempo estimado de chegada (ETA) e horário previsto, barra de progresso, timeline com horário de cada etapa (recebido → aceito → em preparo → saiu para entrega → entregue), animação de pulso na etapa ativa e endereço de entrega. Atualiza automaticamente a cada 4s.
 

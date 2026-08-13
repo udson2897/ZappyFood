@@ -44,7 +44,10 @@ export default function Addresses() {
     setError(null);
     try {
       const r = await lookupCep(form.zip);
-      setForm((f) => ({ ...f, street: r.street, neighborhood: r.neighborhood, city: r.city, state: r.state, zip: r.zip }));
+      setForm((f) => ({
+        ...f, street: r.street, neighborhood: r.neighborhood, city: r.city, state: r.state, zip: r.zip,
+        lat: r.lat ?? f.lat, lng: r.lng ?? f.lng,
+      }));
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -90,7 +93,16 @@ export default function Addresses() {
     }
     setSaving(true);
     try {
-      await api.createAddress({ ...form, is_default: list.length === 0 });
+      let { lat, lng } = form;
+      // Se não temos coordenadas, tentar geocodificar o endereço (para taxa por distância)
+      if (lat == null || lng == null) {
+        try {
+          const full = `${form.street}, ${form.number}, ${form.city}, ${form.state}, Brasil`;
+          const results = await Location.geocodeAsync(full);
+          if (results && results[0]) { lat = results[0].latitude; lng = results[0].longitude; }
+        } catch {}
+      }
+      await api.createAddress({ ...form, lat, lng, is_default: list.length === 0 });
       setModalOpen(false);
       setForm({ ...EMPTY });
       load();

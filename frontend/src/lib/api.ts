@@ -142,14 +142,36 @@ export const api = {
     apiFetch<any>(`/addresses/${id}`, { method: 'DELETE' }),
   // loyalty
   loyalty: () => apiFetch<{ points: number; value_brl: number; rate: string }>('/loyalty'),
+  // delivery fee by distance
+  deliveryQuote: (store_id: string, address_id?: string, subtotal = 0, lat?: number, lng?: number) =>
+    apiFetch<{ distance_km: number | null; fee: number; deliverable: boolean; eta_min: number; reason: string | null; max_radius_km: number }>(
+      '/delivery/quote',
+      { method: 'POST', body: JSON.stringify({ store_id, address_id, subtotal, lat, lng }) },
+    ),
 };
 
-// ViaCEP lookup (public, no auth)
+// CEP lookup (BrasilAPI v2 gives coordinates; falls back to ViaCEP)
 export async function lookupCep(cep: string) {
   const clean = cep.replace(/\D/g, '');
   if (clean.length !== 8) throw new Error('CEP inválido');
-  const r = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
-  const data = await r.json();
+  try {
+    const r = await fetch(`https://brasilapi.com.br/api/cep/v2/${clean}`);
+    if (r.ok) {
+      const d = await r.json();
+      const coords = d.location?.coordinates || {};
+      return {
+        street: d.street || '',
+        neighborhood: d.neighborhood || '',
+        city: d.city || '',
+        state: d.state || '',
+        zip: clean,
+        lat: coords.latitude ? parseFloat(coords.latitude) : null,
+        lng: coords.longitude ? parseFloat(coords.longitude) : null,
+      };
+    }
+  } catch {}
+  const r2 = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+  const data = await r2.json();
   if (data.erro) throw new Error('CEP não encontrado');
   return {
     street: data.logradouro || '',
@@ -157,5 +179,7 @@ export async function lookupCep(cep: string) {
     city: data.localidade || '',
     state: data.uf || '',
     zip: clean,
+    lat: null as number | null,
+    lng: null as number | null,
   };
 }
