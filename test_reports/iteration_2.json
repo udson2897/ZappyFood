@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 2 (Addresses + Variations/Addons + Loyalty) tested end-to-end. Backend: 9/9 new-feature pytest tests pass (address lifecycle incl. default toggle & delete, seeded X-Burger variations/addons, lojista product create with variations, order unit_price 36.90 for X-Burger+Duplo+Bacon, /loyalty endpoint, redeem 20 pts deducts + earn floor(total) on FINALIZADO + NO double credit on re-finalize, refund on CANCELADO, order address snapshot). Regression: 25/27 pass; 2 pre-existing test bugs unrelated to iter2 (email lowercase in register test, lojista active_role mutated to 'cliente' from earlier UI/manual runs). Frontend (390x844): full flow verified — sign-in cliente → /addresses add TEST_UI (form validated) → store detail Burger House → tap X-Burger Clássico opens ProductCustomizer modal → select Duplo/Ao ponto/Bacon extra with live price R$ 36,90 → Adicionar → cart CTA → checkout shows options label, two-address selector (Casa default), Pix, and loyalty card 'Usar 226 pontos • desconto R$ 22,60' → toggle points → total drops 43,80→21,20 → Confirmar → redirected to /track/{id} showing item options and 'Pontos (226) - R$ 22,60' and total R$ 21,20. No red screens, no blocking errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "checkout.tsx", "issues": ["Delivery fee is hardcoded to 6.9 in checkout (line 32) instead of pulled from selected store's delivery_fee. Backend uses actual store fee, so displayed total on checkout can differ from server total when store fee != 6.9 (Pizzaria Bella=8.00, Açaí Tropical=5.00). Confirm button shows a preview total that may not match final."]},
+      {"screen": "(customer)/_layout.tsx", "issues": ["Console warning: 'No route named cart exists in nested children'. A `<Stack.Screen name=cart>` (or similar) is declared without a matching /app/(customer)/cart.tsx. Remove the declaration or add the file."]},
+      {"screen": "Global", "issues": ["Persistent deprecated 'shadow*' style props warning (pre-existing from iter1)."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter2_features.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iter2_results.xml"
+  ],
+  "action_items": [
+    "checkout.tsx: replace hardcoded `deliveryFee = 6.9` with the delivery_fee from the current store (cart already knows storeId — fetch or store fee in cart context) so preview total matches server total for Pizzaria/Açaí.",
+    "(customer)/_layout.tsx: remove the orphan `cart` Stack.Screen reference (or create the screen) to eliminate console warning.",
+    "backend_test.py: (minor) update test_register_new_cliente to compare lowercase email and reset lojista active_role at fixture start so regression suite stays green."
+  ],
+  "critical_code_review_comments": [
+    "Order create redemption logic caps redemption to (subtotal+delivery-discount) which is correct; frontend also caps via maxRedeemablePoints. Consistent.",
+    "double-credit guard `not order.get('points_credited')` verified working — repeating FINALIZADO does NOT credit twice.",
+    "Address `is_default` behavior: first address auto-default; POST with is_default=True correctly unsets others via update_many. Verified.",
+    "Product variations schema flows through /my/products create + /orders create option_labels snapshot cleanly; unit_price rounded to 2dp."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter2_features.py",
+    "/app/test_reports/pytest/iter2_results.xml"
+  ],
+  "success_rate": {"backend": "100% (9/9 iter2 tests; 25/27 total when including iter1 regression, 2 failures are pre-existing test-code issues)", "frontend": "100% for all iter2 flows tested"},
+  "seed_data_creation": "Backend auto-seed unchanged; tests create/delete TEST_ addresses and TEST_Combo products with cleanup.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter2 testIDs verified: address-add, address-label/street/number/complement/neighborhood/city/state/cep/save, address-default-{id}, address-delete-{id}, address-use-gps, checkout-manage-address, checkout-addr-{id}, checkout-loyalty, checkout-use-points, checkout-confirm, product-{id}, customizer-close, customizer-add, opt-{group}-{option}, addon-{name}, cart-line-{key}, cart-inc/dec/remove-{key}. Route paths: /(customer)/addresses, /(customer)/checkout, /(customer)/track/{id}. Full customization → checkout with points → order flow verified working with real backend responses.",
+  "rca_of_issue": "N/A — no functional bugs in iteration 2 features. The two minor design items (hardcoded delivery fee in checkout preview + orphan cart route in layout) are code hygiene issues, not blockers."
+}

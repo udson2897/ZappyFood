@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, TextInput,
+  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, TextInput, Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, font, brl } from "@/src/theme";
 import { useCart } from "@/src/store/cart";
 import { api } from "@/src/lib/api";
+import { useAuth } from "@/src/auth/AuthContext";
 
 const PAYMENTS = [
   { id: "PIX", label: "Pix", icon: "flash" as const },
@@ -17,26 +18,62 @@ const PAYMENTS = [
 
 export default function Checkout() {
   const router = useRouter();
+  const { refresh } = useAuth();
   const { lines, storeId, storeName, subtotal, incItem, decItem, removeItem, clear, count } = useCart();
   const [payment, setPayment] = useState<"PIX" | "CARTAO" | "DINHEIRO">("PIX");
   const [notes, setNotes] = useState("");
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const deliveryFee = 6.9;
-  const total = subtotal + (count > 0 ? deliveryFee : 0);
+  const [addresses, setAddresses] = useState<any[]>([]);
+  const [selectedAddr, setSelectedAddr] = useState<string | null>(null);
+  const [points, setPoints] = useState(0);
+  const [usePoints, setUsePoints] = useState(false);
+  const [deliveryFee, setDeliveryFee] = useState(0);
+
+  const loadData = useCallback(async () => {
+    const [addr, loy] = await Promise.all([api.addresses(), api.loyalty()]);
+    setAddresses(addr);
+    setPoints(loy.points);
+    const def = addr.find((a: any) => a.is_default) || addr[0];
+    if (def && !selectedAddr) setSelectedAddr(def.id);
+    if (storeId) {
+      try {
+        const s = await api.storeDetail(storeId);
+        setDeliveryFee(s.delivery_fee || 0);
+      } catch {}
+    }
+  }, [selectedAddr, storeId]);
+
+  useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
+
+  const baseTotal = subtotal + (count > 0 ? deliveryFee : 0);
+  // 100 points = R$10 -> 1 point = R$0.10. Cap redemption to baseTotal.
+  const maxRedeemablePoints = Math.min(points, Math.floor(baseTotal / 0.1));
+  const redeemPoints = usePoints ? maxRedeemablePoints : 0;
+  const pointsDiscount = redeemPoints * 0.1;
+  const total = Math.max(0, baseTotal - pointsDiscount);
 
   const placeOrder = async () => {
     if (!storeId || lines.length === 0) return;
+    if (!selectedAddr) { setError("Selecione um endereço de entrega"); return; }
     setError(null);
     setPlacing(true);
     try {
       const order = await api.createOrder({
         store_id: storeId,
-        items: lines.map((l) => ({ product_id: l.product_id, quantity: l.quantity })),
+        items: lines.map((l) => ({
+          product_id: l.product_id,
+          quantity: l.quantity,
+          variations: l.variations,
+          addons: l.addons,
+        })),
+        address_id: selectedAddr,
         payment_method: payment,
         notes,
+        redeem_points: redeemPoints,
       });
       clear();
+      refresh();
       router.replace(`/(customer)/track/${order.id}`);
     } catch (e: any) {
       setError(e.message || "Falha ao criar pedido");
@@ -82,34 +119,57 @@ export default function Checkout() {
 
         <Text style={styles.section}>Itens</Text>
         {lines.map((l) => (
-          <View key={l.product_id} style={styles.line} testID={`cart-line-${l.product_id}`}>
+          <View key={l.key} style={styles.line} testID={`cart-line-${l.key}`}>
             <View style={{ flex: 1 }}>
               <Text style={styles.lineName}>{l.name}</Text>
-              <Text style={styles.linePrice}>{brl(l.price)}</Text>
+              {l.options_label ? <Text style={styles.lineOptions}>{l.options_label}</Text> : null}
+              <Text style={styles.linePrice}>{brl(l.unit_price)}</Text>
             </View>
             <View style={styles.qtyBox}>
-              <Pressable onPress={() => decItem(l.product_id)} style={styles.qtyBtn} testID={`cart-dec-${l.product_id}`}>
+              <Pressable onPress={() => decItem(l.key)} style={styles.qtyBtn} testID={`cart-dec-${l.key}`}>
                 <Ionicons name="remove" size={16} color={colors.brand} />
               </Pressable>
               <Text style={styles.qtyText}>{l.quantity}</Text>
-              <Pressable onPress={() => incItem(l.product_id)} style={styles.qtyBtn} testID={`cart-inc-${l.product_id}`}>
+              <Pressable onPress={() => incItem(l.key)} style={styles.qtyBtn} testID={`cart-inc-${l.key}`}>
                 <Ionicons name="add" size={16} color={colors.brand} />
               </Pressable>
             </View>
-            <Pressable onPress={() => removeItem(l.product_id)} style={{ marginLeft: 8 }} testID={`cart-remove-${l.product_id}`}>
+            <Pressable onPress={() => removeItem(l.key)} style={{ marginLeft: 8 }} testID={`cart-remove-${l.key}`}>
               <Ionicons name="trash-outline" size={18} color={colors.error} />
             </Pressable>
           </View>
         ))}
 
-        <Text style={styles.section}>Endereço de entrega</Text>
-        <View style={styles.addressCard}>
-          <Ionicons name="location" size={20} color={colors.brand} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.addressTitle}>Endereço principal</Text>
-            <Text style={styles.addressSub}>Rua Exemplo, 123 - São Paulo/SP</Text>
-          </View>
+        <View style={styles.sectionRow}>
+          <Text style={styles.section}>Endereço de entrega</Text>
+          <Pressable testID="checkout-manage-address" onPress={() => router.push("/(customer)/addresses")}>
+            <Text style={styles.manageLink}>Gerenciar</Text>
+          </Pressable>
         </View>
+        {addresses.length === 0 ? (
+          <Pressable testID="checkout-add-address" style={styles.addAddr} onPress={() => router.push("/(customer)/addresses")}>
+            <Ionicons name="add-circle-outline" size={20} color={colors.brand} />
+            <Text style={styles.addAddrText}>Adicionar endereço</Text>
+          </Pressable>
+        ) : (
+          addresses.map((a) => (
+            <Pressable
+              key={a.id}
+              testID={`checkout-addr-${a.id}`}
+              style={[styles.addressCard, selectedAddr === a.id && styles.addressCardActive]}
+              onPress={() => setSelectedAddr(a.id)}
+            >
+              <Ionicons name="location" size={20} color={selectedAddr === a.id ? colors.brand : colors.onSurfaceSecondary} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.addressTitle}>{a.label}</Text>
+                <Text style={styles.addressSub}>{a.street}, {a.number} - {a.city}/{a.state}</Text>
+              </View>
+              <View style={[styles.radio, selectedAddr === a.id && styles.radioActive]}>
+                {selectedAddr === a.id && <View style={styles.radioDot} />}
+              </View>
+            </Pressable>
+          ))
+        )}
 
         <Text style={styles.section}>Forma de pagamento</Text>
         {PAYMENTS.map((p) => (
@@ -127,6 +187,17 @@ export default function Checkout() {
           </Pressable>
         ))}
 
+        {points > 0 && (
+          <View style={styles.loyaltyCard} testID="checkout-loyalty">
+            <Ionicons name="ribbon" size={22} color={colors.brand} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.loyaltyTitle}>Usar {maxRedeemablePoints} pontos</Text>
+              <Text style={styles.loyaltySub}>Você tem {points} pontos • desconto de {brl(maxRedeemablePoints * 0.1)}</Text>
+            </View>
+            <Switch testID="checkout-use-points" value={usePoints} onValueChange={setUsePoints} trackColor={{ true: colors.brand }} />
+          </View>
+        )}
+
         <Text style={styles.section}>Observações</Text>
         <TextInput
           testID="checkout-notes"
@@ -141,25 +212,17 @@ export default function Checkout() {
         <View style={styles.summary}>
           <SumRow label="Subtotal" value={brl(subtotal)} />
           <SumRow label="Taxa de entrega" value={brl(deliveryFee)} />
+          {redeemPoints > 0 && <SumRow label={`Desconto (${redeemPoints} pts)`} value={`- ${brl(pointsDiscount)}`} />}
           <View style={styles.divider} />
           <SumRow label="Total" value={brl(total)} bold />
         </View>
 
-        {error && <Text style={styles.error}>{error}</Text>}
+        {error && <Text style={styles.error} testID="checkout-error">{error}</Text>}
       </ScrollView>
 
       <View style={styles.footer}>
-        <Pressable
-          testID="checkout-confirm"
-          style={styles.confirmBtn}
-          disabled={placing}
-          onPress={placeOrder}
-        >
-          {placing ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.confirmText}>Confirmar pedido • {brl(total)}</Text>
-          )}
+        <Pressable testID="checkout-confirm" style={styles.confirmBtn} disabled={placing} onPress={placeOrder}>
+          {placing ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmText}>Confirmar pedido • {brl(total)}</Text>}
         </Pressable>
       </View>
     </SafeAreaView>
@@ -177,48 +240,39 @@ function SumRow({ label, value, bold }: { label: string; value: string; bold?: b
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
-  header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
-    borderBottomWidth: 1, borderBottomColor: colors.divider,
-  },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
   headerTitle: { fontSize: font.size.lg, fontWeight: "700", color: colors.onSurface },
   storeLabel: { color: colors.onSurfaceSecondary },
   section: { marginTop: spacing.xl, marginBottom: spacing.sm, fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg },
+  sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
+  manageLink: { color: colors.brand, fontWeight: "700", marginBottom: spacing.sm },
   line: { flexDirection: "row", alignItems: "center", paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
   lineName: { fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg },
+  lineOptions: { color: colors.onSurfaceSecondary, fontSize: font.size.sm, marginTop: 2 },
   linePrice: { color: colors.onSurfaceSecondary, marginTop: 2 },
   qtyBox: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.brandTertiary, borderRadius: radius.pill, paddingHorizontal: 4 },
   qtyBtn: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
   qtyText: { fontWeight: "700", color: colors.onSurface, minWidth: 20, textAlign: "center" },
-  addressCard: {
-    flexDirection: "row", alignItems: "center", gap: spacing.md,
-    padding: spacing.md, borderRadius: radius.md,
-    backgroundColor: colors.surfaceSecondary,
-  },
+  addressCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.sm },
+  addressCardActive: { borderColor: colors.brand, backgroundColor: colors.brandTertiary },
   addressTitle: { fontWeight: "700", color: colors.onSurface },
   addressSub: { color: colors.onSurfaceSecondary, marginTop: 2, fontSize: font.size.sm },
-  paymentRow: {
-    flexDirection: "row", alignItems: "center", gap: spacing.md,
-    padding: spacing.md, borderRadius: radius.md, marginBottom: spacing.sm,
-    borderWidth: 1, borderColor: colors.border,
-  },
+  addAddr: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.brand, borderStyle: "dashed" },
+  addAddrText: { color: colors.brand, fontWeight: "700" },
+  paymentRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, borderRadius: radius.md, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border },
   paymentRowActive: { borderColor: colors.brand, backgroundColor: colors.brandTertiary },
   paymentLabel: { flex: 1, color: colors.onSurface, fontSize: font.size.lg },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   radioActive: { borderColor: colors.brand },
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.brand },
-  notesInput: {
-    backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md,
-    minHeight: 80, textAlignVertical: "top", color: colors.onSurface,
-  },
+  loyaltyCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: spacing.lg, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.brandTertiary, borderWidth: 1, borderColor: colors.brandSecondary },
+  loyaltyTitle: { fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg },
+  loyaltySub: { color: colors.onSurfaceSecondary, fontSize: font.size.sm, marginTop: 2 },
+  notesInput: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, minHeight: 80, textAlignVertical: "top", color: colors.onSurface },
   summary: { marginTop: spacing.xl, padding: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.sm },
   error: { color: colors.error, marginTop: spacing.md, textAlign: "center" },
-  footer: {
-    position: "absolute", left: 0, right: 0, bottom: 0,
-    padding: spacing.lg, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.divider,
-  },
+  footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: spacing.lg, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.divider },
   confirmBtn: { backgroundColor: colors.brand, borderRadius: radius.md, paddingVertical: spacing.lg, alignItems: "center" },
   confirmText: { color: "#fff", fontWeight: "800", fontSize: font.size.lg },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },

@@ -132,4 +132,30 @@ export const api = {
       body: JSON.stringify({ text }),
     }),
   dashboard: () => apiFetch<any>('/my/dashboard'),
+  // addresses
+  addresses: () => apiFetch<any[]>('/addresses'),
+  createAddress: (body: any) =>
+    apiFetch<any>('/addresses', { method: 'POST', body: JSON.stringify(body) }),
+  setDefaultAddress: (id: string) =>
+    apiFetch<any>(`/addresses/${id}/default`, { method: 'PATCH' }),
+  deleteAddress: (id: string) =>
+    apiFetch<any>(`/addresses/${id}`, { method: 'DELETE' }),
+  // loyalty
+  loyalty: () => apiFetch<{ points: number; value_brl: number; rate: string }>('/loyalty'),
 };
+
+// ViaCEP lookup (public, no auth)
+export async function lookupCep(cep: string) {
+  const clean = cep.replace(/\D/g, '');
+  if (clean.length !== 8) throw new Error('CEP inválido');
+  const r = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+  const data = await r.json();
+  if (data.erro) throw new Error('CEP não encontrado');
+  return {
+    street: data.logradouro || '',
+    neighborhood: data.bairro || '',
+    city: data.localidade || '',
+    state: data.uf || '',
+    zip: clean,
+  };
+}

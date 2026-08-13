@@ -103,7 +103,12 @@ export default function Track() {
           {order.items.map((it: any, i: number) => (
             <View key={i} style={styles.itemRow}>
               <Text style={styles.itemQty}>{it.quantity}×</Text>
-              <Text style={styles.itemName}>{it.name}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.itemName}>{it.name}</Text>
+                {it.options && it.options.length > 0 && (
+                  <Text style={styles.itemOptions}>{it.options.join(" • ")}</Text>
+                )}
+              </View>
               <Text style={styles.itemPrice}>{brl(it.line_total)}</Text>
             </View>
           ))}
@@ -111,8 +116,12 @@ export default function Track() {
           <Row label="Subtotal" value={brl(order.subtotal)} />
           <Row label="Entrega" value={brl(order.delivery_fee)} />
           {order.discount > 0 && <Row label="Desconto" value={`- ${brl(order.discount)}`} />}
+          {order.points_discount > 0 && <Row label={`Pontos (${order.points_redeemed})`} value={`- ${brl(order.points_discount)}`} />}
           <Row label="Total" value={brl(order.total)} bold />
           <Text style={styles.paymentText}>Pagamento: {order.payment_method}</Text>
+          {order.points_earned > 0 && order.status === "FINALIZADO" && (
+            <Text style={styles.earnedText}>+{order.points_earned} pontos ganhos 🎉</Text>
+          )}
         </View>
 
         {order.status === "AGUARDANDO_CONFIRMACAO" && (
@@ -184,7 +193,9 @@ const styles = StyleSheet.create({
   itemRow: { flexDirection: "row", paddingVertical: 4 },
   itemQty: { color: colors.brand, fontWeight: "700", width: 28 },
   itemName: { flex: 1, color: colors.onSurface },
+  itemOptions: { color: colors.onSurfaceTertiary, fontSize: font.size.sm, marginTop: 2 },
   itemPrice: { color: colors.onSurface, fontWeight: "600" },
+  earnedText: { color: colors.success, fontWeight: "700", marginTop: spacing.sm },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.sm },
   sumRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
   sumLabel: { color: colors.onSurfaceSecondary },

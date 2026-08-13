@@ -1,21 +1,41 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 
 export type CartLine = {
+  key: string; // unique per product configuration
   product_id: string;
   name: string;
-  price: number;
+  base_price: number;
+  unit_price: number; // base + variation deltas + addons
   image_url?: string;
   quantity: number;
+  options_label: string;
+  variations: Record<string, string>;
+  addons: string[];
 };
+
+export type ConfiguredItem = {
+  product_id: string;
+  name: string;
+  base_price: number;
+  unit_price: number;
+  image_url?: string;
+  options_label: string;
+  variations: Record<string, string>;
+  addons: string[];
+};
+
+function lineKey(item: ConfiguredItem) {
+  return `${item.product_id}|${JSON.stringify(item.variations)}|${item.addons.slice().sort().join(',')}`;
+}
 
 type CartCtx = {
   storeId: string | null;
   storeName: string | null;
   lines: CartLine[];
-  addItem: (storeId: string, storeName: string, item: Omit<CartLine, 'quantity'>) => boolean;
-  incItem: (product_id: string) => void;
-  decItem: (product_id: string) => void;
-  removeItem: (product_id: string) => void;
+  addConfigured: (storeId: string, storeName: string, item: ConfiguredItem) => void;
+  incItem: (key: string) => void;
+  decItem: (key: string) => void;
+  removeItem: (key: string) => void;
   clear: () => void;
   subtotal: number;
   count: number;
@@ -34,41 +54,35 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setStoreName(null);
   }, []);
 
-  const addItem = (sid: string, sname: string, item: Omit<CartLine, 'quantity'>) => {
-    if (storeId && storeId !== sid) {
-      return false; // caller must handle confirmation to switch store
-    }
+  const addConfigured = (sid: string, sname: string, item: ConfiguredItem) => {
     setStoreId(sid);
     setStoreName(sname);
+    const key = lineKey(item);
     setLines((prev) => {
-      const idx = prev.findIndex((l) => l.product_id === item.product_id);
+      const idx = prev.findIndex((l) => l.key === key);
       if (idx >= 0) {
         const copy = [...prev];
         copy[idx] = { ...copy[idx], quantity: copy[idx].quantity + 1 };
         return copy;
       }
-      return [...prev, { ...item, quantity: 1 }];
+      return [...prev, { ...item, key, quantity: 1 }];
     });
-    return true;
   };
 
-  const incItem = (pid: string) =>
-    setLines((prev) => prev.map((l) => (l.product_id === pid ? { ...l, quantity: l.quantity + 1 } : l)));
-  const decItem = (pid: string) =>
+  const incItem = (key: string) =>
+    setLines((prev) => prev.map((l) => (l.key === key ? { ...l, quantity: l.quantity + 1 } : l)));
+  const decItem = (key: string) =>
     setLines((prev) =>
-      prev
-        .map((l) => (l.product_id === pid ? { ...l, quantity: l.quantity - 1 } : l))
-        .filter((l) => l.quantity > 0),
+      prev.map((l) => (l.key === key ? { ...l, quantity: l.quantity - 1 } : l)).filter((l) => l.quantity > 0),
     );
-  const removeItem = (pid: string) =>
-    setLines((prev) => prev.filter((l) => l.product_id !== pid));
+  const removeItem = (key: string) => setLines((prev) => prev.filter((l) => l.key !== key));
 
-  const subtotal = lines.reduce((sum, l) => sum + l.price * l.quantity, 0);
+  const subtotal = lines.reduce((sum, l) => sum + l.unit_price * l.quantity, 0);
   const count = lines.reduce((sum, l) => sum + l.quantity, 0);
 
   return (
     <Ctx.Provider
-      value={{ storeId, storeName, lines, addItem, incItem, decItem, removeItem, clear, subtotal, count }}
+      value={{ storeId, storeName, lines, addConfigured, incItem, decItem, removeItem, clear, subtotal, count }}
     >
       {children}
     </Ctx.Provider>

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator,
+  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Modal,
 } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -13,10 +13,11 @@ import { useCart } from "@/src/store/cart";
 export default function StoreDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { addItem, storeId, storeName, count, subtotal, clear } = useCart();
+  const { addConfigured, storeId, storeName, count, subtotal, clear } = useCart();
   const [store, setStore] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [warn, setWarn] = useState(false);
+  const [customizing, setCustomizing] = useState<any | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -41,17 +42,20 @@ export default function StoreDetail() {
     productsByCategory[p.category].push(p);
   }
 
-  const handleAdd = (p: any) => {
+  const startAdd = (p: any) => {
     if (storeId && storeId !== store.id) {
       setWarn(true);
       return;
     }
-    addItem(store.id, store.fantasy_name, {
-      product_id: p.id,
-      name: p.name,
-      price: p.price,
-      image_url: p.image_url,
-    });
+    const hasOptions = (p.variation_groups?.length || 0) > 0 || (p.addons?.length || 0) > 0;
+    if (hasOptions) {
+      setCustomizing(p);
+    } else {
+      addConfigured(store.id, store.fantasy_name, {
+        product_id: p.id, name: p.name, base_price: p.price, unit_price: p.price,
+        image_url: p.image_url, options_label: "", variations: {}, addons: [],
+      });
+    }
   };
 
   return (
@@ -80,26 +84,25 @@ export default function StoreDetail() {
         {Object.entries(productsByCategory).map(([cat, items]) => (
           <View key={cat} style={styles.section}>
             <Text style={styles.sectionTitle}>{cat}</Text>
-            {items.map((p) => (
-              <Pressable
-                key={p.id}
-                testID={`product-${p.id}`}
-                style={styles.productRow}
-                onPress={() => handleAdd(p)}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.productName}>{p.name}</Text>
-                  <Text style={styles.productDesc} numberOfLines={2}>{p.description}</Text>
-                  <Text style={styles.productPrice}>{brl(p.price)}</Text>
-                </View>
-                <View style={styles.productImgWrap}>
-                  <Image source={{ uri: p.image_url }} style={styles.productImg} contentFit="cover" />
-                  <View style={styles.plusBtn}>
-                    <Ionicons name="add" size={18} color="#fff" />
+            {items.map((p) => {
+              const hasOptions = (p.variation_groups?.length || 0) > 0 || (p.addons?.length || 0) > 0;
+              return (
+                <Pressable key={p.id} testID={`product-${p.id}`} style={styles.productRow} onPress={() => startAdd(p)}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.productName}>{p.name}</Text>
+                    <Text style={styles.productDesc} numberOfLines={2}>{p.description}</Text>
+                    <Text style={styles.productPrice}>{brl(p.price)}</Text>
+                    {hasOptions && <Text style={styles.customTag}>Personalizável</Text>}
                   </View>
-                </View>
-              </Pressable>
-            ))}
+                  <View style={styles.productImgWrap}>
+                    <Image source={{ uri: p.image_url }} style={styles.productImg} contentFit="cover" />
+                    <View style={styles.plusBtn}>
+                      <Ionicons name="add" size={18} color="#fff" />
+                    </View>
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
         ))}
       </ScrollView>
@@ -109,16 +112,13 @@ export default function StoreDetail() {
           <View style={styles.warnBox}>
             <Text style={styles.warnTitle}>Nova loja?</Text>
             <Text style={styles.warnText}>
-              Você já tem itens de {storeName} no carrinho. Ao adicionar produtos daqui, seu carrinho será esvaziado.
+              Você já tem itens de {storeName} no carrinho. Ao continuar aqui, seu carrinho será esvaziado.
             </Text>
             <View style={styles.warnActions}>
               <Pressable style={styles.warnCancel} onPress={() => setWarn(false)}>
                 <Text style={styles.warnCancelText}>Manter</Text>
               </Pressable>
-              <Pressable style={styles.warnOk} onPress={() => {
-                // Just clear; user needs to tap product again
-                clear(); setWarn(false);
-              }}>
+              <Pressable style={styles.warnOk} onPress={() => { clear(); setWarn(false); }}>
                 <Text style={styles.warnOkText}>Esvaziar carrinho</Text>
               </Pressable>
             </View>
@@ -126,12 +126,19 @@ export default function StoreDetail() {
         </View>
       )}
 
+      {customizing && (
+        <ProductCustomizer
+          product={customizing}
+          onClose={() => setCustomizing(null)}
+          onAdd={(cfg) => {
+            addConfigured(store.id, store.fantasy_name, cfg);
+            setCustomizing(null);
+          }}
+        />
+      )}
+
       {count > 0 && storeId === store.id && (
-        <Pressable
-          testID="store-cart-cta"
-          style={styles.cartBanner}
-          onPress={() => router.push("/(customer)/checkout")}
-        >
+        <Pressable testID="store-cart-cta" style={styles.cartBanner} onPress={() => router.push("/(customer)/checkout")}>
           <View style={styles.cartBadge}><Text style={styles.cartBadgeText}>{count}</Text></View>
           <Text style={styles.cartText}>Ver carrinho</Text>
           <Text style={styles.cartTotal}>{brl(subtotal)}</Text>
@@ -141,15 +148,118 @@ export default function StoreDetail() {
   );
 }
 
+function ProductCustomizer({ product, onClose, onAdd }: { product: any; onClose: () => void; onAdd: (cfg: any) => void }) {
+  const groups: any[] = useMemo(() => product.variation_groups || [], [product]);
+  const addons: any[] = useMemo(() => product.addons || [], [product]);
+  const [selected, setSelected] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const g of groups) if (g.required && g.options?.length) init[g.name] = g.options[0].name;
+    return init;
+  });
+  const [chosenAddons, setChosenAddons] = useState<string[]>([]);
+
+  const unitPrice = useMemo(() => {
+    let price = product.price;
+    for (const g of groups) {
+      const sel = selected[g.name];
+      const opt = g.options?.find((o: any) => o.name === sel);
+      if (opt) price += opt.price_delta || 0;
+    }
+    for (const a of addons) if (chosenAddons.includes(a.name)) price += a.price;
+    return price;
+  }, [selected, chosenAddons, groups, addons, product.price]);
+
+  const allRequiredMet = groups.every((g) => !g.required || selected[g.name]);
+
+  const toggleAddon = (name: string) =>
+    setChosenAddons((prev) => (prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]));
+
+  const buildLabel = () => {
+    const parts: string[] = [];
+    for (const g of groups) if (selected[g.name]) parts.push(`${g.name}: ${selected[g.name]}`);
+    for (const a of chosenAddons) parts.push(`+ ${a}`);
+    return parts.join(" • ");
+  };
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.customWrap}>
+        <View style={styles.customSheet}>
+          <View style={styles.customHeader}>
+            <Text style={styles.customTitle}>{product.name}</Text>
+            <Pressable testID="customizer-close" onPress={onClose}>
+              <Ionicons name="close" size={24} color={colors.onSurface} />
+            </Pressable>
+          </View>
+          <ScrollView>
+            {groups.map((g) => (
+              <View key={g.name} style={styles.customGroup}>
+                <View style={styles.groupHead}>
+                  <Text style={styles.groupName}>{g.name}</Text>
+                  {g.required && <Text style={styles.required}>Obrigatório</Text>}
+                </View>
+                {g.options?.map((o: any) => {
+                  const on = selected[g.name] === o.name;
+                  return (
+                    <Pressable
+                      key={o.name}
+                      testID={`opt-${g.name}-${o.name}`}
+                      style={styles.optionRow}
+                      onPress={() => setSelected((p) => ({ ...p, [g.name]: o.name }))}
+                    >
+                      <Text style={styles.optionName}>{o.name}</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                        {o.price_delta > 0 && <Text style={styles.optionPrice}>+ {brl(o.price_delta)}</Text>}
+                        <View style={[styles.radio, on && styles.radioOn]}>{on && <View style={styles.radioDot} />}</View>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
+            {addons.length > 0 && (
+              <View style={styles.customGroup}>
+                <Text style={styles.groupName}>Adicionais</Text>
+                {addons.map((a) => {
+                  const on = chosenAddons.includes(a.name);
+                  return (
+                    <Pressable key={a.name} testID={`addon-${a.name}`} style={styles.optionRow} onPress={() => toggleAddon(a.name)}>
+                      <Text style={styles.optionName}>{a.name}</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                        <Text style={styles.optionPrice}>+ {brl(a.price)}</Text>
+                        <View style={[styles.check, on && styles.checkOn]}>{on && <Ionicons name="checkmark" size={14} color="#fff" />}</View>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          </ScrollView>
+          <Pressable
+            testID="customizer-add"
+            style={[styles.addBtn, !allRequiredMet && { opacity: 0.5 }]}
+            disabled={!allRequiredMet}
+            onPress={() =>
+              onAdd({
+                product_id: product.id, name: product.name, base_price: product.price,
+                unit_price: unitPrice, image_url: product.image_url,
+                options_label: buildLabel(), variations: selected, addons: chosenAddons,
+              })
+            }
+          >
+            <Text style={styles.addText}>Adicionar • {brl(unitPrice)}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   banner: { width: "100%", height: 200, backgroundColor: colors.surfaceTertiary },
   overlayBar: { position: "absolute", left: 0, right: 0, top: 0, paddingHorizontal: spacing.md },
-  backBtn: {
-    marginTop: spacing.sm, width: 40, height: 40, borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.95)",
-    alignItems: "center", justifyContent: "center",
-  },
+  backBtn: { marginTop: spacing.sm, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.95)", alignItems: "center", justifyContent: "center" },
   storeHead: { padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.divider },
   title: { fontSize: font.size.xxl, fontWeight: "800", color: colors.onSurface },
   desc: { color: colors.onSurfaceSecondary, marginTop: spacing.xs, fontSize: font.size.sm },
@@ -157,24 +267,17 @@ const styles = StyleSheet.create({
   metaText: { color: colors.onSurfaceSecondary, fontSize: font.size.sm },
   section: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
   sectionTitle: { fontSize: font.size.lg, fontWeight: "700", color: colors.onSurface, marginBottom: spacing.md },
-  productRow: {
-    flexDirection: "row", gap: spacing.md, paddingVertical: spacing.md,
-    borderBottomWidth: 1, borderBottomColor: colors.divider,
-  },
+  productRow: { flexDirection: "row", gap: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
   productName: { fontSize: font.size.lg, fontWeight: "700", color: colors.onSurface },
   productDesc: { color: colors.onSurfaceSecondary, marginTop: 2, fontSize: font.size.sm },
   productPrice: { color: colors.brand, fontWeight: "700", marginTop: spacing.sm, fontSize: font.size.lg },
+  customTag: { color: colors.onSurfaceTertiary, fontSize: font.size.sm, marginTop: 2 },
   productImgWrap: { position: "relative" },
   productImg: { width: 100, height: 100, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary },
-  plusBtn: {
-    position: "absolute", right: -8, bottom: -8,
-    width: 32, height: 32, borderRadius: 16, backgroundColor: colors.brand,
-    alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#fff",
-  },
+  plusBtn: { position: "absolute", right: -8, bottom: -8, width: 32, height: 32, borderRadius: 16, backgroundColor: colors.brand, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#fff" },
   cartBanner: {
     position: "absolute", left: spacing.lg, right: spacing.lg, bottom: spacing.lg,
-    backgroundColor: colors.brand, borderRadius: radius.md,
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    backgroundColor: colors.brand, borderRadius: radius.md, flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
     shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 6,
   },
@@ -182,10 +285,7 @@ const styles = StyleSheet.create({
   cartBadgeText: { color: colors.brand, fontWeight: "800" },
   cartText: { color: "#fff", fontWeight: "700", fontSize: font.size.lg },
   cartTotal: { color: "#fff", fontWeight: "700", fontSize: font.size.lg },
-  warnOverlay: {
-    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", padding: spacing.xl,
-  },
+  warnOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", padding: spacing.xl },
   warnBox: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, width: "100%" },
   warnTitle: { fontSize: font.size.xl, fontWeight: "800", color: colors.onSurface },
   warnText: { color: colors.onSurfaceSecondary, marginTop: spacing.sm },
@@ -194,4 +294,23 @@ const styles = StyleSheet.create({
   warnCancelText: { color: colors.onSurface, fontWeight: "700" },
   warnOk: { flex: 1, paddingVertical: spacing.md, alignItems: "center", borderRadius: radius.md, backgroundColor: colors.brand },
   warnOkText: { color: "#fff", fontWeight: "700" },
+  // customizer
+  customWrap: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" },
+  customSheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, padding: spacing.lg, maxHeight: "85%" },
+  customHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md },
+  customTitle: { fontSize: font.size.xl, fontWeight: "800", color: colors.onSurface, flex: 1 },
+  customGroup: { marginBottom: spacing.lg },
+  groupHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm },
+  groupName: { fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg },
+  required: { color: colors.brand, fontSize: font.size.sm, fontWeight: "600" },
+  optionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  optionName: { color: colors.onSurface, fontSize: font.size.lg },
+  optionPrice: { color: colors.onSurfaceSecondary, fontSize: font.size.sm },
+  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.borderStrong, alignItems: "center", justifyContent: "center" },
+  radioOn: { borderColor: colors.brand },
+  radioDot: { width: 11, height: 11, borderRadius: 6, backgroundColor: colors.brand },
+  check: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: colors.borderStrong, alignItems: "center", justifyContent: "center" },
+  checkOn: { borderColor: colors.brand, backgroundColor: colors.brand },
+  addBtn: { backgroundColor: colors.brand, borderRadius: radius.md, paddingVertical: spacing.lg, alignItems: "center", marginTop: spacing.sm },
+  addText: { color: "#fff", fontWeight: "800", fontSize: font.size.lg },
 });

@@ -10,7 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.deliverysaasbuild.wbz4to"
+      "bundleIdentifier": "com.emergent.deliverysaasbuild.wbz4to",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Usamos sua localização para preencher o endereço de entrega"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +21,8 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.deliverysaasbuild.wbz4to"
+      "package": "com.emergent.deliverysaasbuild.wbz4to",
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
     },
     "web": {
       "bundler": "metro",

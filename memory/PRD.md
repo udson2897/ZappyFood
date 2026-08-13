@@ -26,6 +26,11 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
 ## Implemented (2026-08-12)
+### Iter 2 (2026-08-13)
+- [x] Endereços reais: cadastro múltiplo, busca por CEP (ViaCEP), captura por GPS (expo-location), definir principal, excluir; seleção obrigatória no checkout
+- [x] Variações (tamanho/sabor com preço adicional) e adicionais (ingredientes extras com preço próprio): lojista cria/edita no produto; cliente escolhe em modal de personalização com preço ao vivo
+- [x] Fidelidade real: ganha pontos ao finalizar pedido (R$1 = 1 pt), resgata no checkout (100 pts = R$10) com guarda contra crédito duplo e estorno ao cancelar
+
 - [x] Auth JWT (register, login, refresh, me, switch-role) + demo seed accounts
 - [x] Cliente: home com lojas + filtro por categoria, busca, detalhe da loja com produtos, carrinho, checkout (Pix/Cartão/Dinheiro), acompanhamento com timeline de status, avaliação, favoritos (UI placeholder), fidelidade (UI)
 - [x] Lojista: dashboard com métricas (receita hoje, pedidos, ticket médio, ativos), fila de pedidos com avanço de status, CRUD de produtos, configuração da loja + status (aberta/pausa/fechada/férias), assinatura (UI)

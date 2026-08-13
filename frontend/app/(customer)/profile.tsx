@@ -1,16 +1,20 @@
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { colors, spacing, radius, font } from "@/src/theme";
 import { useAuth } from "@/src/auth/AuthContext";
 
 export default function Profile() {
   const { user, signOut, switchRole } = useAuth();
+  const router = useRouter();
 
   const toggle = async () => {
     const target = user?.active_role === "lojista" ? "cliente" : "lojista";
     await switchRole(target as any);
   };
+
+  const points = user?.loyalty_points || 0;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -43,13 +47,13 @@ export default function Profile() {
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Fidelidade ZappyFood</Text>
-          <Text style={styles.loyaltyText}>0 pontos acumulados</Text>
-          <Text style={styles.loyaltyHint}>Cada R$ 1,00 gasto = 1 ponto. 100 pontos = R$ 10,00 de desconto.</Text>
+          <Text style={styles.loyaltyText}>{points} pontos acumulados</Text>
+          <Text style={styles.loyaltyHint}>Vale {`R$ ${(points * 0.1).toFixed(2).replace(".", ",")}`} de desconto. Cada R$ 1,00 gasto = 1 ponto.</Text>
         </View>
 
         <View style={styles.rows}>
-          <Row icon="person-outline" label="Dados pessoais" />
-          <Row icon="location-outline" label="Meus endereços" />
+          <Row icon="location-outline" label="Meus endereços" onPress={() => router.push("/(customer)/addresses")} />
+          <Row icon="receipt-outline" label="Meus pedidos" onPress={() => router.push("/(customer)/orders")} />
           <Row icon="heart-outline" label="Favoritos" />
           <Row icon="help-circle-outline" label="Ajuda" />
         </View>
@@ -63,9 +67,9 @@ export default function Profile() {
   );
 }
 
-function Row({ icon, label }: { icon: any; label: string }) {
+function Row({ icon, label, onPress }: { icon: any; label: string; onPress?: () => void }) {
   return (
-    <Pressable style={styles.row}>
+    <Pressable style={styles.row} onPress={onPress} testID={`profile-row-${label}`}>
       <Ionicons name={icon} size={22} color={colors.onSurfaceSecondary} />
       <Text style={styles.rowLabel}>{label}</Text>
       <Ionicons name="chevron-forward" size={18} color={colors.onSurfaceTertiary} />

@@ -123,6 +123,7 @@ class UserOut(BaseModel):
     phone: Optional[str] = None
     role: Role
     active_role: Role
+    loyalty_points: int = 0
 
 
 class TokenOut(BaseModel):
@@ -145,6 +146,8 @@ class AddressIn(BaseModel):
     state: str
     zip: str
     is_default: bool = False
+    lat: Optional[float] = None
+    lng: Optional[float] = None
 
 
 class StoreIn(BaseModel):
@@ -165,6 +168,22 @@ class StoreStatusIn(BaseModel):
     status: Literal["ABERTA", "FECHADA", "PAUSA", "FERIAS"]
 
 
+class VariationOption(BaseModel):
+    name: str
+    price_delta: float = 0.0
+
+
+class VariationGroup(BaseModel):
+    name: str
+    required: bool = False
+    options: List[VariationOption] = []
+
+
+class Addon(BaseModel):
+    name: str
+    price: float = 0.0
+
+
 class ProductIn(BaseModel):
     name: str
     description: Optional[str] = ""
@@ -173,12 +192,16 @@ class ProductIn(BaseModel):
     image_url: Optional[str] = ""
     stock: int = 100
     available: bool = True
+    variation_groups: List[VariationGroup] = []
+    addons: List[Addon] = []
 
 
 class CartItem(BaseModel):
     product_id: str
     quantity: int
     notes: Optional[str] = ""
+    variations: dict = {}       # {group_name: option_name}
+    addons: List[str] = []      # addon names
 
 
 class OrderCreateIn(BaseModel):
@@ -188,6 +211,7 @@ class OrderCreateIn(BaseModel):
     payment_method: PaymentMethod = "PIX"
     notes: Optional[str] = ""
     coupon_code: Optional[str] = None
+    redeem_points: int = 0
 
 
 class OrderStatusIn(BaseModel):
@@ -204,6 +228,15 @@ class RatingIn(BaseModel):
 
 
 # ============== Auth Routes ==============
+def to_user_out(user: dict) -> UserOut:
+    return UserOut(
+        id=user["id"], name=user["name"], email=user["email"],
+        phone=user.get("phone", ""), role=user["role"],
+        active_role=user.get("active_role", user["role"]),
+        loyalty_points=user.get("loyalty_points", 0),
+    )
+
+
 @api.post("/auth/register", response_model=TokenOut, status_code=201)
 async def register(data: RegisterIn):
     if data.role == "admin":
@@ -220,16 +253,13 @@ async def register(data: RegisterIn):
         "password_hash": hash_password(data.password),
         "role": data.role,
         "active_role": data.role,
+        "loyalty_points": 0,
         "created_at": now_utc().isoformat(),
     }
     await db.users.insert_one(doc)
     access = make_token(uid, data.role, "access", timedelta(minutes=ACCESS_MIN))
     refresh = make_token(uid, data.role, "refresh", timedelta(days=REFRESH_DAYS))
-    return TokenOut(
-        access_token=access, refresh_token=refresh,
-        user=UserOut(id=uid, name=data.name, email=data.email, phone=doc["phone"],
-                     role=data.role, active_role=data.role)
-    )
+    return TokenOut(access_token=access, refresh_token=refresh, user=to_user_out(doc))
 
 
 @api.post("/auth/login", response_model=TokenOut)
@@ -239,12 +269,7 @@ async def login(data: LoginIn):
         raise HTTPException(401, "E-mail ou senha inválidos")
     access = make_token(user["id"], user["role"], "access", timedelta(minutes=ACCESS_MIN))
     refresh = make_token(user["id"], user["role"], "refresh", timedelta(days=REFRESH_DAYS))
-    return TokenOut(
-        access_token=access, refresh_token=refresh,
-        user=UserOut(id=user["id"], name=user["name"], email=user["email"],
-                     phone=user.get("phone", ""), role=user["role"],
-                     active_role=user.get("active_role", user["role"]))
-    )
+    return TokenOut(access_token=access, refresh_token=refresh, user=to_user_out(user))
 
 
 @api.post("/auth/refresh", response_model=TokenOut)
@@ -258,32 +283,31 @@ async def refresh(body: dict):
         raise HTTPException(401, "Usuário não encontrado")
     access = make_token(user["id"], user["role"], "access", timedelta(minutes=ACCESS_MIN))
     refresh_new = make_token(user["id"], user["role"], "refresh", timedelta(days=REFRESH_DAYS))
-    return TokenOut(
-        access_token=access, refresh_token=refresh_new,
-        user=UserOut(id=user["id"], name=user["name"], email=user["email"],
-                     phone=user.get("phone", ""), role=user["role"],
-                     active_role=user.get("active_role", user["role"]))
-    )
+    return TokenOut(access_token=access, refresh_token=refresh_new, user=to_user_out(user))
 
 
 @api.get("/auth/me", response_model=UserOut)
 async def me(user=Depends(current_user)):
-    return UserOut(id=user["id"], name=user["name"], email=user["email"],
-                   phone=user.get("phone", ""), role=user["role"],
-                   active_role=user.get("active_role", user["role"]))
+    return to_user_out(user)
+
+
+@api.get("/loyalty")
+async def loyalty(user=Depends(current_user)):
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    pts = fresh.get("loyalty_points", 0)
+    return {"points": pts, "value_brl": round(pts * 0.10, 2), "rate": "R$ 1 = 1 ponto • 100 pontos = R$ 10"}
 
 
 @api.post("/auth/switch-role", response_model=UserOut)
 async def switch_role(data: RoleSwitchIn, user=Depends(current_user)):
-    # Allow switching between cliente and lojista freely (single-app dual profile)
     if data.active_role == "admin":
         raise HTTPException(403, "Não pode alternar para admin")
-    await db.users.update_one({"id": user["id"]}, {"$set": {"active_role": data.active_role}})
-    # If user does not have a store and switching to lojista, keep role but active_role is lojista
+    update = {"active_role": data.active_role}
     if data.active_role == "lojista" and user["role"] == "cliente":
-        # Upgrade base role permission-wise: allow multi-role by tracking active_role
-        await db.users.update_one({"id": user["id"]}, {"$set": {"role": "lojista"}})
-    return await me(user={**user, "active_role": data.active_role, "role": "lojista" if data.active_role == "lojista" else user["role"]})
+        update["role"] = "lojista"
+    await db.users.update_one({"id": user["id"]}, {"$set": update})
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return to_user_out(fresh)
 
 
 # ============== Address Routes ==============
@@ -296,11 +320,30 @@ async def list_addresses(user=Depends(current_user)):
 @api.post("/addresses")
 async def create_address(data: AddressIn, user=Depends(current_user)):
     aid = str(uuid.uuid4())
+    count = await db.addresses.count_documents({"user_id": user["id"]})
+    make_default = data.is_default or count == 0
     doc = {"id": aid, "user_id": user["id"], **data.dict(), "created_at": now_utc().isoformat()}
-    if data.is_default:
+    doc["is_default"] = make_default
+    if make_default:
         await db.addresses.update_many({"user_id": user["id"]}, {"$set": {"is_default": False}})
     await db.addresses.insert_one(doc)
     return {k: v for k, v in doc.items() if k != "_id"}
+
+
+@api.patch("/addresses/{aid}/default")
+async def set_default_address(aid: str, user=Depends(current_user)):
+    target = await db.addresses.find_one({"id": aid, "user_id": user["id"]})
+    if not target:
+        raise HTTPException(404, "Endereço não encontrado")
+    await db.addresses.update_many({"user_id": user["id"]}, {"$set": {"is_default": False}})
+    await db.addresses.update_one({"id": aid}, {"$set": {"is_default": True}})
+    return {"ok": True}
+
+
+@api.delete("/addresses/{aid}")
+async def delete_address(aid: str, user=Depends(current_user)):
+    await db.addresses.delete_one({"id": aid, "user_id": user["id"]})
+    return {"ok": True}
 
 
 # ============== Store Routes ==============
@@ -427,12 +470,32 @@ async def create_order(data: OrderCreateIn, user=Depends(current_user)):
     items_snapshot = []
     for it in data.items:
         p = products_map[it.product_id]
-        line = p["price"] * it.quantity
+        unit = p["price"]
+        option_labels = []
+        # variation deltas
+        for group in p.get("variation_groups", []):
+            sel = (it.variations or {}).get(group["name"])
+            if sel:
+                for opt in group.get("options", []):
+                    if opt["name"] == sel:
+                        unit += opt.get("price_delta", 0.0)
+                        option_labels.append(f"{group['name']}: {sel}")
+                        break
+        # addon prices
+        addon_map = {a["name"]: a["price"] for a in p.get("addons", [])}
+        for aname in (it.addons or []):
+            if aname in addon_map:
+                unit += addon_map[aname]
+                option_labels.append(f"+ {aname}")
+        line = unit * it.quantity
         subtotal += line
         items_snapshot.append({
             "product_id": p["id"], "name": p["name"], "price": p["price"],
-            "quantity": it.quantity, "line_total": line, "notes": it.notes or "",
+            "unit_price": round(unit, 2), "quantity": it.quantity,
+            "line_total": round(line, 2), "notes": it.notes or "",
             "image_url": p.get("image_url", ""),
+            "options": option_labels,
+            "variations": it.variations or {}, "addons": it.addons or [],
         })
     delivery_fee = store.get("delivery_fee", 0.0)
     discount = 0.0
@@ -445,7 +508,16 @@ async def create_order(data: OrderCreateIn, user=Depends(current_user)):
                 discount = coupon["value"]
             elif coupon["type"] == "FREE_SHIPPING":
                 delivery_fee = 0.0
-    total = max(0.0, subtotal + delivery_fee - discount)
+    # Loyalty points redemption (1 point = R$ 0.10)
+    fresh_user = await db.users.find_one({"id": user["id"]})
+    available_points = fresh_user.get("loyalty_points", 0)
+    redeem = max(0, min(int(data.redeem_points or 0), available_points))
+    # cap redemption so total never goes below 0
+    max_redeem_value = max(0.0, subtotal + delivery_fee - discount)
+    if redeem * 0.10 > max_redeem_value:
+        redeem = int(max_redeem_value / 0.10)
+    points_discount = round(redeem * 0.10, 2)
+    total = max(0.0, subtotal + delivery_fee - discount - points_discount)
     oid = str(uuid.uuid4())
     order = {
         "id": oid,
@@ -457,13 +529,25 @@ async def create_order(data: OrderCreateIn, user=Depends(current_user)):
         "subtotal": round(subtotal, 2),
         "delivery_fee": round(delivery_fee, 2),
         "discount": round(discount, 2),
+        "points_redeemed": redeem,
+        "points_discount": points_discount,
         "total": round(total, 2),
         "payment_method": data.payment_method,
         "notes": data.notes or "",
+        "address_id": data.address_id,
         "status": "AGUARDANDO_CONFIRMACAO",
         "status_history": [{"status": "AGUARDANDO_CONFIRMACAO", "at": now_utc().isoformat()}],
+        "points_credited": False,
+        "points_refunded": False,
         "created_at": now_utc().isoformat(),
     }
+    # attach address snapshot
+    if data.address_id:
+        addr = await db.addresses.find_one({"id": data.address_id, "user_id": user["id"]}, {"_id": 0})
+        order["address"] = addr
+    # reserve redeemed points now
+    if redeem > 0:
+        await db.users.update_one({"id": user["id"]}, {"$inc": {"loyalty_points": -redeem}})
     await db.orders.insert_one(order)
     return {k: v for k, v in order.items() if k != "_id"}
 
@@ -515,6 +599,15 @@ async def update_order_status(oid: str, data: OrderStatusIn, user=Depends(curren
         {"id": oid},
         {"$set": {"status": data.status}, "$push": {"status_history": entry}},
     )
+    # Loyalty side-effects
+    if data.status == "FINALIZADO" and not order.get("points_credited"):
+        earned = int(order["total"])  # R$1 = 1 ponto
+        if earned > 0:
+            await db.users.update_one({"id": order["customer_id"]}, {"$inc": {"loyalty_points": earned}})
+        await db.orders.update_one({"id": oid}, {"$set": {"points_credited": True, "points_earned": earned}})
+    if data.status == "CANCELADO" and order.get("points_redeemed", 0) > 0 and not order.get("points_refunded"):
+        await db.users.update_one({"id": order["customer_id"]}, {"$inc": {"loyalty_points": order["points_redeemed"]}})
+        await db.orders.update_one({"id": oid}, {"$set": {"points_refunded": True}})
     return await db.orders.find_one({"id": oid}, {"_id": 0})
 
 
@@ -644,6 +737,53 @@ DEMO_STORES = [
 ]
 
 
+DEMO_EXTRAS = {
+    "X-Burger Clássico": {
+        "variation_groups": [
+            {"name": "Tamanho", "required": True, "options": [
+                {"name": "Simples", "price_delta": 0.0},
+                {"name": "Duplo", "price_delta": 8.0},
+            ]},
+            {"name": "Ponto da carne", "required": True, "options": [
+                {"name": "Ao ponto", "price_delta": 0.0},
+                {"name": "Bem passado", "price_delta": 0.0},
+            ]},
+        ],
+        "addons": [
+            {"name": "Bacon extra", "price": 4.0},
+            {"name": "Cheddar extra", "price": 3.0},
+            {"name": "Ovo", "price": 2.5},
+        ],
+    },
+    "X-Bacon": {
+        "variation_groups": [
+            {"name": "Tamanho", "required": True, "options": [
+                {"name": "Simples", "price_delta": 0.0},
+                {"name": "Duplo", "price_delta": 9.0},
+            ]},
+        ],
+        "addons": [
+            {"name": "Cheddar extra", "price": 3.0},
+            {"name": "Cebola caramelizada", "price": 3.5},
+        ],
+    },
+    "Açaí 500ml": {
+        "variation_groups": [
+            {"name": "Cremosidade", "required": True, "options": [
+                {"name": "Tradicional", "price_delta": 0.0},
+                {"name": "Zero açúcar", "price_delta": 2.0},
+            ]},
+        ],
+        "addons": [
+            {"name": "Granola", "price": 2.0},
+            {"name": "Leite condensado", "price": 2.5},
+            {"name": "Morango", "price": 3.5},
+            {"name": "Paçoca", "price": 2.0},
+        ],
+    },
+}
+
+
 async def seed_data():
     if await db.stores.count_documents({}) > 0:
         return
@@ -657,6 +797,7 @@ async def seed_data():
         "password_hash": hash_password("lojista123"),
         "role": "lojista",
         "active_role": "lojista",
+        "loyalty_points": 0,
         "created_at": now_utc().isoformat(),
     })
     for s in DEMO_STORES:
@@ -673,14 +814,17 @@ async def seed_data():
             "created_at": now_utc().isoformat(),
         })
         for name, desc, price, img, cat in s["products"]:
+            extras = DEMO_EXTRAS.get(name, {})
             await db.products.insert_one({
                 "id": str(uuid.uuid4()),
                 "store_id": sid, "name": name, "description": desc,
                 "category": cat, "price": price, "image_url": img,
                 "stock": 100, "available": True,
+                "variation_groups": extras.get("variation_groups", []),
+                "addons": extras.get("addons", []),
                 "created_at": now_utc().isoformat(),
             })
-    # Demo cliente
+    # Demo cliente (com pontos de fidelidade para testar resgate)
     await db.users.insert_one({
         "id": str(uuid.uuid4()),
         "name": "Demo Cliente",
@@ -689,6 +833,7 @@ async def seed_data():
         "password_hash": hash_password("cliente123"),
         "role": "cliente",
         "active_role": "cliente",
+        "loyalty_points": 150,
         "created_at": now_utc().isoformat(),
     })
     log.info("Seed complete")
