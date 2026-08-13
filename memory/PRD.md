@@ -25,6 +25,9 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 7 (2026-08-13)
+- [x] Notificações push reais (Emergent-managed / SuprSend relay): backend `/api/register-push` + helper `send_push` (X-Push-Key). `push_notification` agora grava o aviso in-app E dispara push real (não bloqueante). Frontend: `expo-notifications` (plugin no app.json, canal Android, handler foreground em module scope), tap handlers (warm + cold start) que abrem o pedido, nudge semanal quando permissão negada, `registerForPush` (getDevicePushTokenAsync) chamado ao logar. `EMERGENT_PUSH_KEY=placeholder` no .env (substituído no deploy). `app.json` android.googleServicesFile aponta para ./google-services.json (usuário fornece antes do build). Push só funciona após deploy + build; em preview retorna placeholder.
+
 ### Iter 6 (2026-08-13)
 - [x] Confirmação de recebimento pelo cliente: quando o pedido está "Saiu para entrega", o cliente vê o botão "Confirmar recebimento" na tela de acompanhamento; ao tocar, o status vira "Entregue", os pontos são creditados e o lojista recebe a notificação "X confirmou o recebimento".
 - [x] Auto-finalização: tarefa em background (roda a cada 60s) que marca automaticamente como "Entregue" pedidos em "Saiu para entrega" que passaram de 30 min do horário previsto de entrega (created_at + est_delivery_min + 30min), creditando pontos e avisando o lojista. Registrado no histórico com flag auto=true.
