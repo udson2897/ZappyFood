@@ -148,6 +148,11 @@ export const api = {
       '/delivery/quote',
       { method: 'POST', body: JSON.stringify({ store_id, address_id, subtotal, lat, lng }) },
     ),
+  // notifications
+  notifications: () => apiFetch<any[]>('/notifications'),
+  unreadCount: () => apiFetch<{ count: number }>('/notifications/unread_count'),
+  readAllNotifications: () => apiFetch<any>('/notifications/read_all', { method: 'POST' }),
+  readNotification: (id: string) => apiFetch<any>(`/notifications/${id}/read`, { method: 'POST' }),
 };
 
 // CEP lookup (BrasilAPI v2 gives coordinates; falls back to ViaCEP)

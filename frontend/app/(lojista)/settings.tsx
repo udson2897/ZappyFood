@@ -30,6 +30,8 @@ export default function Settings() {
     lat: null as number | null, lng: null as number | null,
   });
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [pricingMode, setPricingMode] = useState<"per_km" | "bands">("per_km");
+  const [bands, setBands] = useState<{ max_km: string; fee: string }[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -52,6 +54,9 @@ export default function Settings() {
           lat: s.lat ?? null,
           lng: s.lng ?? null,
         });
+        setPricingMode(s.pricing_mode === "bands" ? "bands" : "per_km");
+        const b = (s.delivery_bands || []).map((x: any) => ({ max_km: String(x.max_km), fee: String(x.fee) }));
+        setBands(b.length ? b : [{ max_km: "2", fee: "5" }, { max_km: "5", fee: "8" }, { max_km: "8", fee: "12" }]);
       }
     } finally {
       setLoading(false);
@@ -77,6 +82,10 @@ export default function Settings() {
     setSaving(true);
     try {
       const base = parseFloat(form.base_delivery_fee.replace(",", ".")) || 0;
+      const parsedBands = bands
+        .map((b) => ({ max_km: parseFloat(b.max_km.replace(",", ".")) || 0, fee: parseFloat(b.fee.replace(",", ".")) || 0 }))
+        .filter((b) => b.max_km > 0)
+        .sort((a, b) => a.max_km - b.max_km);
       const saved = await api.saveStore({
         fantasy_name: form.fantasy_name,
         category: form.category,
@@ -87,11 +96,13 @@ export default function Settings() {
         min_order: 0,
         banner_url: form.banner_url,
         logo_url: form.logo_url,
+        pricing_mode: pricingMode,
         base_delivery_fee: base,
         price_per_km: parseFloat(form.price_per_km.replace(",", ".")) || 0,
         min_delivery_fee: base,
         max_radius_km: parseFloat(form.max_radius_km.replace(",", ".")) || 8,
         free_above: parseFloat(form.free_above.replace(",", ".")) || 0,
+        delivery_bands: parsedBands,
         lat: form.lat,
         lng: form.lng,
       });
@@ -100,6 +111,11 @@ export default function Settings() {
       setSaving(false);
     }
   };
+
+  const updBand = (i: number, patch: Partial<{ max_km: string; fee: string }>) =>
+    setBands((prev) => prev.map((b, j) => (j === i ? { ...b, ...patch } : b)));
+  const addBand = () => setBands((prev) => [...prev, { max_km: "", fee: "" }]);
+  const removeBand = (i: number) => setBands((prev) => prev.filter((_, j) => j !== i));
 
   const setStatus = async (status: string) => {
     await api.storeStatus(status);
@@ -145,30 +161,83 @@ export default function Settings() {
           <Field label="URL do logo" value={form.logo_url} onChange={(t: string) => setForm({ ...form, logo_url: t })} testID="store-logo" />
 
           <Text style={styles.section}>Entrega por distância</Text>
-          <Text style={styles.helpText}>Taxa automática = taxa base + (km × valor por km), respeitando o raio de atendimento.</Text>
+          <View style={styles.modeRow}>
+            <Pressable
+              testID="pricing-mode-per_km"
+              style={[styles.modeChip, pricingMode === "per_km" && styles.modeChipActive]}
+              onPress={() => setPricingMode("per_km")}
+            >
+              <Text style={[styles.modeText, pricingMode === "per_km" && styles.modeTextActive]}>Valor por km</Text>
+            </Pressable>
+            <Pressable
+              testID="pricing-mode-bands"
+              style={[styles.modeChip, pricingMode === "bands" && styles.modeChipActive]}
+              onPress={() => setPricingMode("bands")}
+            >
+              <Text style={[styles.modeText, pricingMode === "bands" && styles.modeTextActive]}>Faixas de distância</Text>
+            </Pressable>
+          </View>
+
           <Pressable testID="store-use-gps" style={styles.gpsBtn} onPress={useStoreGps} disabled={gpsLoading}>
             {gpsLoading ? <ActivityIndicator color={colors.brand} /> : <Ionicons name="navigate" size={18} color={colors.brand} />}
             <Text style={styles.gpsText}>
               {form.lat != null ? "Localização definida ✓ (tocar para atualizar)" : "Definir localização da loja (GPS)"}
             </Text>
           </Pressable>
-          <View style={{ flexDirection: "row", gap: spacing.md }}>
-            <View style={{ flex: 1 }}>
-              <Field label="Taxa base (R$)" value={form.base_delivery_fee} onChange={(t: string) => setForm({ ...form, base_delivery_fee: t })} testID="store-base-fee" keyboardType="decimal-pad" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Field label="Valor por km (R$)" value={form.price_per_km} onChange={(t: string) => setForm({ ...form, price_per_km: t })} testID="store-per-km" keyboardType="decimal-pad" />
-            </View>
-          </View>
-          <View style={{ flexDirection: "row", gap: spacing.md }}>
-            <View style={{ flex: 1 }}>
+
+          {pricingMode === "per_km" ? (
+            <>
+              <Text style={styles.helpText}>Taxa = taxa base + (km × valor por km), respeitando o raio de atendimento.</Text>
+              <View style={{ flexDirection: "row", gap: spacing.md }}>
+                <View style={{ flex: 1 }}>
+                  <Field label="Taxa base (R$)" value={form.base_delivery_fee} onChange={(t: string) => setForm({ ...form, base_delivery_fee: t })} testID="store-base-fee" keyboardType="decimal-pad" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field label="Valor por km (R$)" value={form.price_per_km} onChange={(t: string) => setForm({ ...form, price_per_km: t })} testID="store-per-km" keyboardType="decimal-pad" />
+                </View>
+              </View>
               <Field label="Raio de atendimento (km)" value={form.max_radius_km} onChange={(t: string) => setForm({ ...form, max_radius_km: t })} testID="store-radius" keyboardType="decimal-pad" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Field label="Frete grátis acima de (R$)" value={form.free_above} onChange={(t: string) => setForm({ ...form, free_above: t })} testID="store-free-above" keyboardType="decimal-pad" />
-            </View>
-          </View>
-          <Text style={styles.helpText}>Deixe o campo de frete grátis em 0 para desativar. Ex: base R$ 5,00 + R$ 1,50/km, então 3 km = R$ 9,50.</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.helpText}>Defina o preço para cada faixa de distância. Pedidos além da maior faixa ficam fora da área.</Text>
+              <View style={styles.bandHead}>
+                <Text style={styles.bandCol}>Até (km)</Text>
+                <Text style={styles.bandCol}>Taxa (R$)</Text>
+                <View style={{ width: 28 }} />
+              </View>
+              {bands.map((b, i) => (
+                <View key={i} style={styles.bandRow} testID={`band-${i}`}>
+                  <TextInput
+                    testID={`band-km-${i}`}
+                    style={styles.bandInput}
+                    keyboardType="decimal-pad"
+                    value={b.max_km}
+                    onChangeText={(t) => updBand(i, { max_km: t })}
+                    placeholder="km"
+                    placeholderTextColor={colors.onSurfaceTertiary}
+                  />
+                  <TextInput
+                    testID={`band-fee-${i}`}
+                    style={styles.bandInput}
+                    keyboardType="decimal-pad"
+                    value={b.fee}
+                    onChangeText={(t) => updBand(i, { fee: t })}
+                    placeholder="R$"
+                    placeholderTextColor={colors.onSurfaceTertiary}
+                  />
+                  <Pressable onPress={() => removeBand(i)} testID={`band-remove-${i}`} style={{ width: 28, alignItems: "center" }}>
+                    <Ionicons name="close-circle" size={22} color={colors.onSurfaceTertiary} />
+                  </Pressable>
+                </View>
+              ))}
+              <Pressable testID="band-add" style={styles.bandAdd} onPress={addBand}>
+                <Ionicons name="add" size={16} color={colors.brand} />
+                <Text style={styles.bandAddText}>Adicionar faixa</Text>
+              </Pressable>
+            </>
+          )}
+          <Field label="Frete grátis acima de (R$, 0 = desativado)" value={form.free_above} onChange={(t: string) => setForm({ ...form, free_above: t })} testID="store-free-above" keyboardType="decimal-pad" />
 
 
           <Pressable testID="store-save" style={styles.saveBtn} onPress={save} disabled={saving}>
@@ -207,6 +276,17 @@ const styles = StyleSheet.create({
   helpText: { color: colors.onSurfaceSecondary, fontSize: font.size.sm, marginBottom: spacing.md },
   gpsBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.brandTertiary, borderRadius: radius.md, paddingVertical: spacing.md, marginBottom: spacing.md },
   gpsText: { color: colors.brand, fontWeight: "700" },
+  modeRow: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.md },
+  modeChip: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill, paddingVertical: spacing.sm, alignItems: "center", backgroundColor: colors.surfaceSecondary },
+  modeChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
+  modeText: { color: colors.onSurface, fontWeight: "600", fontSize: font.size.sm },
+  modeTextActive: { color: "#fff" },
+  bandHead: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.xs },
+  bandCol: { flex: 1, color: colors.onSurfaceSecondary, fontSize: font.size.sm, fontWeight: "600" },
+  bandRow: { flexDirection: "row", gap: spacing.sm, alignItems: "center", marginBottom: spacing.sm },
+  bandInput: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, color: colors.onSurface, backgroundColor: colors.surfaceSecondary, fontSize: font.size.lg },
+  bandAdd: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: spacing.sm, marginBottom: spacing.sm },
+  bandAddText: { color: colors.brand, fontWeight: "700" },
   statusRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginBottom: spacing.md },
   statusChip: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
   statusChipText: { color: colors.onSurface, fontWeight: "600" },

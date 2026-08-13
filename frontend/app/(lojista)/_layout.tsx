@@ -56,6 +56,7 @@ export default function LojistaLayout() {
         }}
       />
       <Tabs.Screen name="order/[id]" options={{ href: null }} />
+      <Tabs.Screen name="promotions" options={{ href: null }} />
     </Tabs>
   );
 }

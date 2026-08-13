@@ -47,13 +47,16 @@ export default function StoreDetail() {
       setWarn(true);
       return;
     }
+    const eff = Math.max(0, p.price - (p.discount || 0));
     const hasOptions = (p.variation_groups?.length || 0) > 0 || (p.addons?.length || 0) > 0;
     if (hasOptions) {
-      setCustomizing(p);
+      setCustomizing({ ...p, price: eff, _original_price: p.price, _discount: p.discount || 0 });
     } else {
       addConfigured(store.id, store.fantasy_name, {
-        product_id: p.id, name: p.name, base_price: p.price, unit_price: p.price,
-        image_url: p.image_url, options_label: "", variations: {}, addons: [],
+        product_id: p.id, name: p.name, base_price: eff, unit_price: eff,
+        image_url: p.image_url,
+        options_label: (p.discount || 0) > 0 ? `Promo -${brl(p.discount)}` : "",
+        variations: {}, addons: [],
       });
     }
   };
@@ -86,12 +89,22 @@ export default function StoreDetail() {
             <Text style={styles.sectionTitle}>{cat}</Text>
             {items.map((p) => {
               const hasOptions = (p.variation_groups?.length || 0) > 0 || (p.addons?.length || 0) > 0;
+              const hasDiscount = (p.discount || 0) > 0;
+              const eff = Math.max(0, p.price - (p.discount || 0));
               return (
                 <Pressable key={p.id} testID={`product-${p.id}`} style={styles.productRow} onPress={() => startAdd(p)}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.productName}>{p.name}</Text>
                     <Text style={styles.productDesc} numberOfLines={2}>{p.description}</Text>
-                    <Text style={styles.productPrice}>{brl(p.price)}</Text>
+                    {hasDiscount ? (
+                      <View style={styles.priceRow}>
+                        <Text style={styles.oldPrice}>{brl(p.price)}</Text>
+                        <Text style={styles.productPrice}>{brl(eff)}</Text>
+                        <View style={styles.promoTag}><Text style={styles.promoTagText}>PROMO</Text></View>
+                      </View>
+                    ) : (
+                      <Text style={styles.productPrice}>{brl(p.price)}</Text>
+                    )}
                     {hasOptions && <Text style={styles.customTag}>Personalizável</Text>}
                   </View>
                   <View style={styles.productImgWrap}>
@@ -271,6 +284,10 @@ const styles = StyleSheet.create({
   productName: { fontSize: font.size.lg, fontWeight: "700", color: colors.onSurface },
   productDesc: { color: colors.onSurfaceSecondary, marginTop: 2, fontSize: font.size.sm },
   productPrice: { color: colors.brand, fontWeight: "700", marginTop: spacing.sm, fontSize: font.size.lg },
+  priceRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.sm },
+  oldPrice: { color: colors.onSurfaceTertiary, textDecorationLine: "line-through", fontSize: font.size.base },
+  promoTag: { backgroundColor: colors.success, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm },
+  promoTagText: { color: "#fff", fontSize: 10, fontWeight: "800" },
   customTag: { color: colors.onSurfaceTertiary, fontSize: font.size.sm, marginTop: 2 },
   productImgWrap: { position: "relative" },
   productImg: { width: 100, height: 100, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary },

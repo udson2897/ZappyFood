@@ -25,6 +25,11 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 5 (2026-08-13)
+- [x] Faixas de distância: lojista pode escolher modo "valor por km" ou "faixas" (ex: 0-2km=R$5, 2-5km=R$8, 5-8km=R$12); editor de faixas nas configurações; quote e criação de pedido respeitam o modo escolhido.
+- [x] Cupons/promoções por produto: tela "Cupons / Promoções" (via painel do lojista) onde o lojista escolhe o produto e define o desconto em R$; cliente vê preço antigo riscado + preço promocional + selo PROMO; pedido usa o preço com desconto.
+- [x] Avisos de status (in-app): coleção de notificações; cliente recebe aviso a cada mudança de status do pedido, lojista recebe aviso de novo pedido; sino com contador de não lidas na home do cliente + tela "Avisos"; endpoints /api/notifications (list, unread_count, read_all, read). Observação: são avisos in-app (polling); push real do SO exige build + google-services.json.
+
 ### Iter 4 (2026-08-13)
 - [x] Taxa de entrega automática por distância (modelo iFood/Uber Eats): `taxa = máx(taxa_mínima, taxa_base + km × valor_por_km)`, distância por Haversine × fator de rota 1.3 entre coordenadas da loja e do endereço do cliente. Respeita raio de atendimento (bloqueia pedidos fora da área com HTTP 400) e frete grátis acima de X. Endpoint POST /api/delivery/quote para prévia ao vivo no checkout; cálculo autoritativo no servidor ao criar pedido. Lojista configura taxa base, valor/km, raio e localização (GPS) nas configurações da loja. Endereços do cliente capturam lat/lng via GPS, BrasilAPI CEP v2 e geocoding.
 

@@ -20,12 +20,18 @@ export default function Home() {
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [unread, setUnread] = useState(0);
 
   const load = useCallback(async () => {
     try {
-      const [s, c] = await Promise.all([api.stores(undefined, activeCat || undefined), api.categories()]);
+      const [s, c, u] = await Promise.all([
+        api.stores(undefined, activeCat || undefined),
+        api.categories(),
+        api.unreadCount().catch(() => ({ count: 0 })),
+      ]);
       setStores(s);
       setCategories(c);
+      setUnread(u.count);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -44,13 +50,27 @@ export default function Home() {
             <Ionicons name="location" size={14} color={colors.brand} /> Entregar em São Paulo
           </Text>
         </View>
-        <Pressable
-          testID="home-open-search"
-          style={styles.searchIcon}
-          onPress={() => router.push("/(customer)/search")}
-        >
-          <Ionicons name="search" size={20} color={colors.onSurface} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            testID="home-open-notifications"
+            style={styles.searchIcon}
+            onPress={() => { setUnread(0); router.push("/(customer)/notifications"); }}
+          >
+            <Ionicons name="notifications-outline" size={20} color={colors.onSurface} />
+            {unread > 0 && (
+              <View style={styles.notifBadge} testID="home-notif-badge">
+                <Text style={styles.notifBadgeText}>{unread > 9 ? "9+" : unread}</Text>
+              </View>
+            )}
+          </Pressable>
+          <Pressable
+            testID="home-open-search"
+            style={styles.searchIcon}
+            onPress={() => router.push("/(customer)/search")}
+          >
+            <Ionicons name="search" size={20} color={colors.onSurface} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -147,6 +167,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSecondary,
     alignItems: "center", justifyContent: "center",
   },
+  headerActions: { flexDirection: "row", gap: spacing.sm },
+  notifBadge: {
+    position: "absolute", top: -2, right: -2, minWidth: 18, height: 18, borderRadius: 9,
+    backgroundColor: colors.brand, alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 4, borderWidth: 2, borderColor: colors.surface,
+  },
+  notifBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
   scroll: { paddingBottom: 120 },
   chipsRow: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.sm },
   chip: {

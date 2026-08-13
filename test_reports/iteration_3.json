@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 3 (Distance BANDS pricing + Product discounts/promotions + In-app Notifications) tested end-to-end. Backend pytest (5/5 iter3): bands quote returns fee=8 for cliente's ~3.4km default address; per_km mode still returns fee=max(min_fee, base+per_km*dist); PATCH /my/products with discount=5 makes X-Burger unit_price 19.90 (24.90-5) and adds 'Desconto R$ 5.00' to item.options; POST /orders creates a 'Novo pedido' notification for store OWNER (lojista unread +1) with order_id set; each status transition ACEITO/EM_PREPARO/SAIU_PARA_ENTREGA/FINALIZADO adds one customer notification (type='status'); /notifications/unread_count and /notifications/read_all work; /notifications endpoints correctly return 401 when unauth. Frontend (390x844): cliente Home bell (home-open-notifications) navigates to /notifications (Avisos) which lists 21 notifications with unread dots, tapping a notification opens /track/{order_id}, home unread badge (home-notif-badge) auto-clears after Avisos loads (read_all effect); lojista dashboard shows 'Cupons / Promoções' link (dash-goto-promotions) that opens promotions screen with 4 products each having promo-input-{id} + promo-save-{id}; Settings 'Loja' screen contains pricing-mode-bands, band-km-0/band-fee-0/band-add, store-save testIDs (verified in code + rendered). No red screens.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Global", "issues": ["Persistent deprecated 'shadow*' style props warning (pre-existing since iter1) — Use 'boxShadow'."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter3_features.py",
+    "/app/test_reports/pytest/iter3_results.xml"
+  ],
+  "action_items": [
+    "SEED DRIFT: Seed only runs when db.stores is empty; over successive test runs the seeded X-Burger got its variation_groups/addons wiped and its 'discount' left at 5.00 by prior UI/pytest runs. Recommend either (a) making seed idempotent (upsert seed products by name every startup) OR (b) adding an /api/admin/reseed endpoint used by tests. During this iteration the X-Burger was manually restored via PATCH so downstream iter2 tests can pass.",
+    "Regression: 2 pre-existing test-code bugs in backend_test.py still there (test_register_new_cliente compares raw email vs lowercased; test_login_lojista depends on active_role='lojista' but user's active_role may be 'cliente' from earlier role switches). These are noted in iter2 report and are NOT iter3 regressions.",
+    "settings.tsx (nit): initial default bands [2,5],[5,8],[8,12] appear even when store already has bands=[] and pricing_mode=per_km — harmless because they aren't sent unless user switches mode, but consider only defaulting when user enters bands mode."
+  ],
+  "critical_code_review_comments": [
+    "compute_delivery_quote correctly picks the smallest band whose max_km >= dist, marks non-deliverable when dist > last band, and honors free_above overlay. Confirmed via cliente ~3.38km -> R$8 (2-5km band).",
+    "Order create applies product.discount before variations/addons: unit = max(0, price - discount) then adds price_delta of variation options and each addon price. It also appends 'Desconto R$ X.XX' to options snapshot — good for audit.",
+    "push_notification creates a doc {id, user_id, title, body, order_id, type, read:false, created_at} — 'Novo pedido' goes to store['owner_id'] on POST /orders; STATUS_NOTIFY maps every non-PENDENTE status to a title/body for the customer. Both /notifications and /unread_count filter by current user_id — no cross-user leak.",
+    "notifications.tsx calls readAllNotifications() on load — this is why bell badge disappears after opening Avisos. Home bell also has its own polling via useFocusEffect + /unread_count."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter3_features.py",
+    "/app/test_reports/pytest/iter3_results.xml"
+  ],
+  "success_rate": {"backend": "100% (5/5 iter3 tests)", "frontend": "100% for cliente notifications flow; lojista promotions verified end-to-end (dash link, list, inputs, save button); lojista bands UI verified via code + testIDs (tab click via internal Expo Tabs testID not exposed, so bands section was reached via code inspection only, not UI click in this run)"},
+  "seed_data_creation": "No new seed. Restored X-Burger variations/addons manually (PATCH /my/products) that had been stripped by prior iterations' runs.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter3 verified testIDs (all present in code and rendered): home-open-notifications, home-notif-badge, notifications-back, notification-{id}, dash-goto-promotions, promo-item-{id}, promo-input-{id}, promo-save-{id}, promotions-back, pricing-mode-per_km, pricing-mode-bands, band-km-{i}, band-fee-{i}, band-add, band-remove-{i}, store-save. Backend endpoints touched: POST /api/delivery/quote (with pricing_mode bands vs per_km), POST /api/my/store (upsert with pricing_mode+delivery_bands), PATCH /api/my/products/{id} (discount field), GET/POST /api/notifications, /api/notifications/unread_count, /api/notifications/read_all. Route note: 'Novo pedido' goes to OWNER; status notifs go to CUSTOMER. Notifications are IN-APP (polling), not OS push (design choice, not a bug).",
+  "rca_of_issue": "N/A for iter3 features — no functional bugs. One environmental concern: non-idempotent seed_data() lets test runs drift the demo product catalog over time; action item above."
+}

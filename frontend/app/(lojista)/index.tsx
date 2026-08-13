@@ -89,6 +89,17 @@ export default function Dashboard() {
           <Ionicons name="arrow-forward-circle" size={32} color={colors.brand} />
         </Pressable>
 
+        <Pressable testID="dash-goto-promotions" style={styles.promoCard} onPress={() => router.push("/(lojista)/promotions")}>
+          <View style={styles.promoIcon}>
+            <Ionicons name="pricetags" size={22} color={colors.brand} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bigCardTitle}>Cupons / Promoções</Text>
+            <Text style={styles.bigCardSub}>Crie descontos nos seus produtos</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={colors.onSurfaceTertiary} />
+        </Pressable>
+
         <View style={styles.subCard}>
           <View style={styles.subHeader}>
             <Ionicons name="ribbon" size={20} color={colors.brand} />
@@ -141,6 +152,8 @@ const styles = StyleSheet.create({
   },
   bigCardTitle: { fontSize: font.size.lg, fontWeight: "800", color: colors.onSurface },
   bigCardSub: { color: colors.onSurfaceSecondary, marginTop: 2 },
+  promoCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.lg, marginTop: spacing.md },
+  promoIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
   subCard: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.lg, marginTop: spacing.lg },
   subHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   subTitle: { fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg },

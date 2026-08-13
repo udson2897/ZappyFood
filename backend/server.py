@@ -40,6 +40,10 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def brl_py(v: float) -> str:
+    return f"R$ {v:.2f}".replace(".", ",")
+
+
 import math
 
 ROAD_FACTOR = 1.3  # aproxima distância de rota a partir da linha reta
@@ -65,6 +69,8 @@ def compute_delivery_quote(store: dict, addr: Optional[dict], subtotal: float = 
     max_radius = store.get("max_radius_km", 8.0)
     free_above = store.get("free_above", 0.0) or 0.0
     est = store.get("est_delivery_min", 30)
+    mode = store.get("pricing_mode", "per_km")
+    bands = sorted(store.get("delivery_bands", []) or [], key=lambda b: b["max_km"])
 
     s_lat, s_lng = store.get("lat"), store.get("lng")
     a_lat = addr.get("lat") if addr else None
@@ -72,9 +78,7 @@ def compute_delivery_quote(store: dict, addr: Optional[dict], subtotal: float = 
 
     if s_lat is None or s_lng is None or a_lat is None or a_lng is None:
         # sem coordenadas -> taxa base, entregável
-        fee = round(max(min_fee, base), 2)
-        if free_above and subtotal >= free_above:
-            fee = 0.0
+        fee = 0.0 if (free_above and subtotal >= free_above) else round(max(min_fee, base), 2)
         return {
             "distance_km": None, "fee": fee, "deliverable": True,
             "eta_min": est, "reason": "Taxa base (distância indisponível)",
@@ -82,10 +86,19 @@ def compute_delivery_quote(store: dict, addr: Optional[dict], subtotal: float = 
         }
 
     dist = round(haversine_km(s_lat, s_lng, a_lat, a_lng) * ROAD_FACTOR, 2)
-    deliverable = dist <= max_radius
-    fee = round(max(min_fee, base + per_km * dist), 2)
+
+    if mode == "bands" and bands:
+        band = next((b for b in bands if dist <= b["max_km"]), None)
+        effective_radius = bands[-1]["max_km"]
+        deliverable = band is not None
+        fee = round(band["fee"], 2) if band else 0.0
+        max_radius = effective_radius
+    else:
+        deliverable = dist <= max_radius
+        fee = round(max(min_fee, base + per_km * dist), 2)
+
     free = bool(free_above and subtotal >= free_above)
-    if free:
+    if free and deliverable:
         fee = 0.0
     eta = int(est + round(dist * 3))  # ~3 min por km
     reason = None
@@ -209,6 +222,11 @@ class AddressIn(BaseModel):
     lng: Optional[float] = None
 
 
+class DeliveryBand(BaseModel):
+    max_km: float
+    fee: float
+
+
 class StoreIn(BaseModel):
     fantasy_name: str
     cnpj: Optional[str] = ""
@@ -224,11 +242,13 @@ class StoreIn(BaseModel):
     # Distance-based delivery pricing
     lat: Optional[float] = None
     lng: Optional[float] = None
+    pricing_mode: str = "per_km"       # "per_km" ou "bands"
     base_delivery_fee: float = 5.0     # taxa base
     price_per_km: float = 1.5          # valor por km
     min_delivery_fee: float = 5.0      # taxa mínima
     max_radius_km: float = 8.0         # raio de atendimento
     free_above: float = 0.0            # frete grátis acima de (0 = desativado)
+    delivery_bands: List[DeliveryBand] = []  # faixas: [{max_km, fee}]
 
 
 class StoreStatusIn(BaseModel):
@@ -259,6 +279,7 @@ class ProductIn(BaseModel):
     image_url: Optional[str] = ""
     stock: int = 100
     available: bool = True
+    discount: float = 0.0   # desconto em R$ (cupom/promoção do lojista)
     variation_groups: List[VariationGroup] = []
     addons: List[Addon] = []
 
@@ -542,6 +563,32 @@ async def delete_product(pid: str, user=Depends(require_role("lojista", "admin")
 
 
 # ============== Order Routes ==============
+async def push_notification(user_id: str, title: str, body: str, order_id: str = None, ntype: str = "order"):
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "order_id": order_id,
+        "title": title,
+        "body": body,
+        "type": ntype,
+        "read": False,
+        "created_at": now_utc().isoformat(),
+    })
+
+
+STATUS_NOTIFY = {
+    "ACEITO": ("Pedido confirmado ✅", "A loja aceitou seu pedido e vai começar a preparar."),
+    "EM_PREPARO": ("Em preparo 🍳", "Seu pedido está sendo preparado."),
+    "SAIU_PARA_ENTREGA": ("Saiu para entrega 🛵", "O entregador está a caminho do seu endereço."),
+    "FINALIZADO": ("Pedido entregue 🎉", "Seu pedido foi entregue. Bom apetite!"),
+    "CANCELADO": ("Pedido cancelado", "Seu pedido foi cancelado."),
+}
+
+
+def now_utc_helpers_marker():
+    pass
+
+
 async def _load_products(product_ids: List[str]) -> dict:
     docs = await db.products.find({"id": {"$in": product_ids}}, {"_id": 0}).to_list(500)
     return {p["id"]: p for p in docs}
@@ -559,8 +606,11 @@ async def create_order(data: OrderCreateIn, user=Depends(current_user)):
     items_snapshot = []
     for it in data.items:
         p = products_map[it.product_id]
-        unit = p["price"]
+        prod_discount = max(0.0, p.get("discount", 0.0) or 0.0)
+        unit = max(0.0, p["price"] - prod_discount)  # preço com desconto do lojista
         option_labels = []
+        if prod_discount > 0:
+            option_labels.append(f"Desconto R$ {prod_discount:.2f}")
         # variation deltas
         for group in p.get("variation_groups", []):
             sel = (it.variations or {}).get(group["name"])
@@ -646,6 +696,11 @@ async def create_order(data: OrderCreateIn, user=Depends(current_user)):
     if redeem > 0:
         await db.users.update_one({"id": user["id"]}, {"$inc": {"loyalty_points": -redeem}})
     await db.orders.insert_one(order)
+    # notify store owner about new order
+    await push_notification(
+        store["owner_id"], "Novo pedido 🛎️",
+        f"{user['name']} fez um pedido de {brl_py(order['total'])}.", oid, "new_order",
+    )
     return {k: v for k, v in order.items() if k != "_id"}
 
 
@@ -705,7 +760,37 @@ async def update_order_status(oid: str, data: OrderStatusIn, user=Depends(curren
     if data.status == "CANCELADO" and order.get("points_redeemed", 0) > 0 and not order.get("points_refunded"):
         await db.users.update_one({"id": order["customer_id"]}, {"$inc": {"loyalty_points": order["points_redeemed"]}})
         await db.orders.update_one({"id": oid}, {"$set": {"points_refunded": True}})
+    # Notify the customer about the status change
+    notify = STATUS_NOTIFY.get(data.status)
+    if notify:
+        title, body = notify
+        await push_notification(order["customer_id"], f"{order['store_name']}: {title}", body, oid, "status")
     return await db.orders.find_one({"id": oid}, {"_id": 0})
+
+
+# ============== Notification Routes ==============
+@api.get("/notifications")
+async def list_notifications(user=Depends(current_user)):
+    docs = await db.notifications.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return docs
+
+
+@api.get("/notifications/unread_count")
+async def unread_count(user=Depends(current_user)):
+    n = await db.notifications.count_documents({"user_id": user["id"], "read": False})
+    return {"count": n}
+
+
+@api.post("/notifications/read_all")
+async def read_all(user=Depends(current_user)):
+    await db.notifications.update_many({"user_id": user["id"], "read": False}, {"$set": {"read": True}})
+    return {"ok": True}
+
+
+@api.post("/notifications/{nid}/read")
+async def read_one(nid: str, user=Depends(current_user)):
+    await db.notifications.update_one({"id": nid, "user_id": user["id"]}, {"$set": {"read": True}})
+    return {"ok": True}
 
 
 @api.post("/orders/{oid}/rating")
