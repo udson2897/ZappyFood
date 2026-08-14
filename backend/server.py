@@ -47,32 +47,6 @@ def brl_py(v: float) -> str:
 
 import math
 
-# ============== Emergent Push (SuprSend relay) ==============
-import httpx
-
-PUSH_BASE_URL = "https://integrations.emergentagent.com"
-PUSH_KEY = os.environ.get("EMERGENT_PUSH_KEY", "placeholder")
-_push_client = httpx.AsyncClient(base_url=PUSH_BASE_URL, headers={"X-Push-Key": PUSH_KEY}, timeout=10.0)
-
-
-class RegisterPushBody(BaseModel):
-    user_id: str
-    platform: str
-    device_token: str
-
-
-async def send_push(recipients: list, data: dict, idempotency_key: str = None) -> None:
-    if not recipients:
-        return
-    if "title" not in data or "message" not in data:
-        return
-    payload = {"recipients": recipients[:100], "data": data}
-    if idempotency_key:
-        payload["$idempotency_key"] = idempotency_key
-    resp = await _push_client.post("/api/v1/push/trigger", json=payload)
-    resp.raise_for_status()
-
-
 ROAD_FACTOR = 1.3  # aproxima distância de rota a partir da linha reta
 
 
@@ -846,23 +820,6 @@ async def read_all(user=Depends(current_user)):
 async def read_one(nid: str, user=Depends(current_user)):
     await db.notifications.update_one({"id": nid, "user_id": user["id"]}, {"$set": {"read": True}})
     return {"ok": True}
-
-
-@api.post("/register-push", status_code=201)
-async def register_push(body: RegisterPushBody):
-    try:
-        resp = await _push_client.post("/api/v1/push/users/register", json=body.model_dump())
-        if resp.status_code == 401:
-            raise HTTPException(500, "EMERGENT_PUSH_KEY missing or invalid")
-        if resp.status_code >= 500:
-            raise HTTPException(502, "Push provider unavailable")
-        resp.raise_for_status()
-    except HTTPException:
-        raise
-    except Exception as e:
-        log.warning(f"register-push failed (non-blocking): {e}")
-        return {"status": "pending"}
-    return {"status": "registered"}
 
 
 @api.post("/orders/{oid}/rating")

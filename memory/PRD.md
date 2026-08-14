@@ -26,7 +26,7 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
 ### Iter 7 (2026-08-13)
-- [x] Notificações push reais (Emergent-managed / SuprSend relay): backend `/api/register-push` + helper `send_push` (X-Push-Key). `push_notification` agora grava o aviso in-app E dispara push real (não bloqueante). Frontend: `expo-notifications` (plugin no app.json, canal Android, handler foreground em module scope), tap handlers (warm + cold start) que abrem o pedido, nudge semanal quando permissão negada, `registerForPush` (getDevicePushTokenAsync) chamado ao logar. `EMERGENT_PUSH_KEY=placeholder` no .env (substituído no deploy). `app.json` android.googleServicesFile aponta para ./google-services.json (usuário fornece antes do build). Push só funciona após deploy + build; em preview retorna placeholder.
+- [x] (Revertido a pedido do usuário) Notificações push reais foram implementadas e depois REMOVIDAS a pedido do usuário. Mantidos apenas os avisos in-app (sino + tela Avisos). Backend sem `/register-push`/`send_push`; `app.json` sem plugin expo-notifications/googleServicesFile; `_layout.tsx` limpo.
 
 ### Iter 6 (2026-08-13)
 - [x] Confirmação de recebimento pelo cliente: quando o pedido está "Saiu para entrega", o cliente vê o botão "Confirmar recebimento" na tela de acompanhamento; ao tocar, o status vira "Entregue", os pontos são creditados e o lojista recebe a notificação "X confirmou o recebimento".
