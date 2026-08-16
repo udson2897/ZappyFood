@@ -25,6 +25,9 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 9 (2026-08-16)
+- [x] Relatório de pagamento de entregadores (painel lojista): tela "Pagamento de Entregadores" com navegação por dia (Ontem/Hoje/data), resumo de total de entregas e total a pagar, agrupamento por entregador (nº de entregas + soma das taxas de entrega = valor a pagar) e lista expansível dos pedidos de cada entregador. Também mostra pedidos finalizados sem entregador atribuído. A taxa de entrega configurada pelo lojista é o pagamento do entregador. Backend: `GET /api/my/couriers/report?date=YYYY-MM-DD` (fuso America/Sao_Paulo, usa horário de finalização do pedido). Atalhos: card no dashboard + ícone no cabeçalho da tela de Entregadores.
+
 ### Iter 8 (2026-08-16)
 - [x] Página web do entregador em `/entregador` (sem login, mobile): digita o número/código do pedido, o sistema busca e exibe o endereço do cliente. Botão "Iniciar rota" abre o Google Maps com a rota até o cliente e ativa o GPS (navigator.geolocation no web / expo-location no nativo) transmitindo a posição em tempo real. Botão "Finalizar entrega" muda o status para Entregue e notifica o cliente.
 - [x] Rastreamento ao vivo com Leaflet + OpenStreetMap (via react-native-webview) — componente `LiveMap` que faz polling da posição do entregador (endpoint público) e move o marcador. O cliente vê o mapa com o entregador na tela de acompanhamento quando o pedido está "Saiu para entrega".

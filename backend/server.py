@@ -48,7 +48,9 @@ def brl_py(v: float) -> str:
 
 
 import math
+from zoneinfo import ZoneInfo
 
+BR_TZ = ZoneInfo("America/Sao_Paulo")
 ROAD_FACTOR = 1.3  # aproxima distância de rota a partir da linha reta
 
 
@@ -906,6 +908,82 @@ async def assign_courier(oid: str, data: AssignCourierIn, user=Depends(require_r
         "id": courier["id"], "name": courier["name"], "cpf": courier["cpf"], "plate": courier["plate"],
     }}})
     return await db.orders.find_one({"id": oid}, {"_id": 0})
+
+
+def _finalized_at(o: dict) -> Optional[str]:
+    for h in reversed(o.get("status_history", []) or []):
+        if h.get("status") == "FINALIZADO":
+            return h.get("at")
+    return o.get("created_at")
+
+
+@api.get("/my/couriers/report")
+async def couriers_report(date: Optional[str] = None, user=Depends(require_role("lojista", "admin"))):
+    """Relatório diário de entregas finalizadas por entregador.
+    A taxa de entrega de cada pedido é o valor a pagar ao entregador.
+    `date` no formato YYYY-MM-DD (padrão: hoje, fuso America/Sao_Paulo)."""
+    store = await db.stores.find_one({"owner_id": user["id"]})
+    if not store:
+        return {"date": datetime.now(BR_TZ).date().isoformat(), "couriers": [],
+                "unassigned": {"deliveries": 0, "total_fee": 0.0, "orders": []},
+                "totals": {"deliveries": 0, "to_pay": 0.0}}
+    try:
+        day = datetime.strptime(date, "%Y-%m-%d").date() if date else datetime.now(BR_TZ).date()
+    except ValueError:
+        raise HTTPException(400, "Data inválida (use YYYY-MM-DD)")
+    start_local = datetime(day.year, day.month, day.day, 0, 0, 0, tzinfo=BR_TZ)
+    start_utc = start_local.astimezone(timezone.utc)
+    end_utc = (start_local + timedelta(days=1)).astimezone(timezone.utc)
+
+    orders = await db.orders.find(
+        {"store_id": store["id"], "status": "FINALIZADO"}, {"_id": 0}
+    ).to_list(2000)
+
+    groups: dict = {}
+    unassigned = {"deliveries": 0, "total_fee": 0.0, "orders": []}
+    for o in orders:
+        fa = _finalized_at(o)
+        try:
+            dt = datetime.fromisoformat(fa)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+        if not (start_utc <= dt < end_utc):
+            continue
+        fee = round(float(o.get("delivery_fee", 0) or 0), 2)
+        entry = {
+            "id": o["id"], "code": o.get("code"), "total": o["total"],
+            "delivery_fee": fee, "customer_name": o.get("customer_name"),
+            "finalized_at": fa,
+        }
+        c = o.get("courier")
+        if c and c.get("id"):
+            g = groups.setdefault(c["id"], {
+                "courier": {"id": c["id"], "name": c.get("name"),
+                            "plate": c.get("plate"), "cpf": c.get("cpf")},
+                "deliveries": 0, "total_fee": 0.0, "orders": [],
+            })
+            g["deliveries"] += 1
+            g["total_fee"] += fee
+            g["orders"].append(entry)
+        else:
+            unassigned["deliveries"] += 1
+            unassigned["total_fee"] += fee
+            unassigned["orders"].append(entry)
+
+    couriers = sorted(groups.values(), key=lambda g: (g["courier"]["name"] or "").lower())
+    for g in couriers:
+        g["total_fee"] = round(g["total_fee"], 2)
+    unassigned["total_fee"] = round(unassigned["total_fee"], 2)
+    total_deliveries = sum(g["deliveries"] for g in couriers) + unassigned["deliveries"]
+    total_pay = round(sum(g["total_fee"] for g in couriers) + unassigned["total_fee"], 2)
+    return {
+        "date": day.isoformat(),
+        "couriers": couriers,
+        "unassigned": unassigned,
+        "totals": {"deliveries": total_deliveries, "to_pay": total_pay},
+    }
 
 
 class CourierAuthIn(BaseModel):

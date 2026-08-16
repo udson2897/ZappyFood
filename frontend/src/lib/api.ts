@@ -159,6 +159,7 @@ export const api = {
   updateCourier: (id: string, body: any) => apiFetch<any>(`/my/couriers/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteCourier: (id: string) => apiFetch<any>(`/my/couriers/${id}`, { method: 'DELETE' }),
   assignCourier: (oid: string, courier_id: string) => apiFetch<any>(`/orders/${oid}/assign-courier`, { method: 'PATCH', body: JSON.stringify({ courier_id }) }),
+  courierReport: (date?: string) => apiFetch<any>(`/my/couriers/report${date ? `?date=${date}` : ''}`),
 };
 
 // CEP lookup (BrasilAPI v2 gives coordinates; falls back to ViaCEP)

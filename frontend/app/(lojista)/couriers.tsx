@@ -40,7 +40,7 @@ export default function Couriers() {
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} testID="couriers-back"><Ionicons name="chevron-back" size={24} color={colors.onSurface} /></Pressable>
         <Text style={styles.headerTitle}>Entregadores</Text>
-        <View style={{ width: 24 }} />
+        <Pressable onPress={() => router.push("/(lojista)/courier-report")} testID="couriers-report-link"><Ionicons name="cash-outline" size={22} color={colors.brand} /></Pressable>
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}>
         {loading ? <ActivityIndicator color={colors.brand} /> : list.length === 0 ? (
