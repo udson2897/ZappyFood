@@ -26,13 +26,15 @@ export default function LojistaOrderDetail() {
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState("");
+  const [couriers, setCouriers] = useState<any[]>([]);
   const scrollRef = useRef<ScrollView>(null);
 
   const load = useCallback(async () => {
     try {
-      const [o, m] = await Promise.all([api.order(id as string), api.listChat(id as string)]);
+      const [o, m, c] = await Promise.all([api.order(id as string), api.listChat(id as string), api.couriers().catch(() => [])]);
       setOrder(o);
       setMessages(m);
+      setCouriers(c);
     } finally {
       setLoading(false);
     }
@@ -98,6 +100,34 @@ export default function LojistaOrderDetail() {
             <Row label="Total" value={brl(order.total)} bold />
             <Text style={styles.payment}>Pagamento: {order.payment_method}</Text>
             {order.notes ? <Text style={styles.notes}>Obs: {order.notes}</Text> : null}
+          </View>
+
+          <Text style={styles.chatTitle}>Entregador</Text>
+          <View style={styles.courierBox}>
+            {order.courier ? (
+              <Text style={styles.courierAssigned}>Atribuído: {order.courier.name} • {order.courier.plate} (código #{order.code})</Text>
+            ) : (
+              <Text style={styles.courierHint}>Escolha um entregador para este pedido:</Text>
+            )}
+            {couriers.length === 0 ? (
+              <Text style={styles.courierHint}>Nenhum entregador cadastrado. Cadastre no painel.</Text>
+            ) : (
+              <View style={styles.courierChips}>
+                {couriers.map((c) => {
+                  const on = order.courier?.id === c.id;
+                  return (
+                    <Pressable
+                      key={c.id}
+                      testID={`assign-courier-${c.id}`}
+                      style={[styles.courierChip, on && styles.courierChipOn]}
+                      onPress={async () => { await api.assignCourier(order.id, c.id); load(); }}
+                    >
+                      <Text style={[styles.courierChipText, on && { color: "#fff" }]}>{c.name}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
           </View>
 
           <Text style={styles.chatTitle}>Chat com cliente</Text>
@@ -171,6 +201,13 @@ const styles = StyleSheet.create({
   payment: { color: colors.onSurfaceSecondary, marginTop: spacing.sm },
   notes: { color: colors.onSurfaceSecondary, marginTop: 2, fontStyle: "italic" },
   chatTitle: { fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg, marginTop: spacing.xl, marginBottom: spacing.sm },
+  courierBox: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md },
+  courierAssigned: { color: colors.success, fontWeight: "700" },
+  courierHint: { color: colors.onSurfaceSecondary, fontSize: font.size.sm },
+  courierChips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm },
+  courierChip: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  courierChipOn: { backgroundColor: colors.brand, borderColor: colors.brand },
+  courierChipText: { color: colors.onSurface, fontWeight: "600" },
   chatBox: { gap: spacing.sm },
   chatEmpty: { color: colors.onSurfaceTertiary },
   bubble: { maxWidth: "80%", padding: spacing.md, borderRadius: radius.md },

@@ -14,6 +14,7 @@ const API = `${BASE}/api`;
 
 export default function Entregador() {
   const [code, setCode] = useState("");
+  const [cpf, setCpf] = useState("");
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,11 +27,19 @@ export default function Entregador() {
 
   const search = async () => {
     const c = code.trim().toUpperCase();
-    if (!c) return;
+    if (!c || !cpf.trim()) { setError("Informe o número do pedido e o CPF."); return; }
     setError(null); setLoading(true); setOrder(null); setRouteStarted(false); setFinished(false);
     try {
-      const r = await fetch(`${API}/courier/order/${c}`);
-      if (!r.ok) { setError("Pedido não encontrado. Verifique o número."); return; }
+      const r = await fetch(`${API}/courier/validate`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: c, cpf: cpf.trim() }),
+      });
+      if (r.status === 404) { setError("Pedido não encontrado. Verifique o número."); return; }
+      if (r.status === 403) {
+        const j = await r.json().catch(() => ({}));
+        setError(j.detail || "CPF não confere com este pedido."); return;
+      }
+      if (!r.ok) { setError("Falha ao validar. Tente novamente."); return; }
       const d = await r.json();
       setOrder(d);
       if (d.status === "FINALIZADO") setFinished(true);
@@ -134,12 +143,22 @@ export default function Entregador() {
               autoCapitalize="characters"
               value={code}
               onChangeText={setCode}
-              onSubmitEditing={search}
             />
             <Pressable testID="courier-search" style={styles.searchBtn} onPress={search} disabled={loading}>
               {loading ? <ActivityIndicator color="#fff" /> : <Ionicons name="search" size={22} color="#fff" />}
             </Pressable>
           </View>
+          <Text style={[styles.label, { marginTop: spacing.md }]}>Seu CPF</Text>
+          <TextInput
+            testID="courier-cpf-input"
+            style={styles.input}
+            placeholder="Somente números"
+            placeholderTextColor={colors.onSurfaceTertiary}
+            keyboardType="number-pad"
+            value={cpf}
+            onChangeText={setCpf}
+            onSubmitEditing={search}
+          />
           {error && <Text style={styles.error} testID="courier-error">{error}</Text>}
 
           {order && (

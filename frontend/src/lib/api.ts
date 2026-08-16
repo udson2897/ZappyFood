@@ -153,6 +153,12 @@ export const api = {
   unreadCount: () => apiFetch<{ count: number }>('/notifications/unread_count'),
   readAllNotifications: () => apiFetch<any>('/notifications/read_all', { method: 'POST' }),
   readNotification: (id: string) => apiFetch<any>(`/notifications/${id}/read`, { method: 'POST' }),
+  // couriers (lojista)
+  couriers: () => apiFetch<any[]>('/my/couriers'),
+  createCourier: (body: any) => apiFetch<any>('/my/couriers', { method: 'POST', body: JSON.stringify(body) }),
+  updateCourier: (id: string, body: any) => apiFetch<any>(`/my/couriers/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteCourier: (id: string) => apiFetch<any>(`/my/couriers/${id}`, { method: 'DELETE' }),
+  assignCourier: (oid: string, courier_id: string) => apiFetch<any>(`/orders/${oid}/assign-courier`, { method: 'PATCH', body: JSON.stringify({ courier_id }) }),
 };
 
 // CEP lookup (BrasilAPI v2 gives coordinates; falls back to ViaCEP)

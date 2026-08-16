@@ -834,6 +834,106 @@ async def read_one(nid: str, user=Depends(current_user)):
     return {"ok": True}
 
 
+class CourierIn(BaseModel):
+    name: str
+    cpf: str
+    plate: str
+
+
+def only_digits(s: str) -> str:
+    return "".join(ch for ch in (s or "") if ch.isdigit())
+
+
+@api.get("/my/couriers")
+async def list_couriers(user=Depends(require_role("lojista", "admin"))):
+    store = await db.stores.find_one({"owner_id": user["id"]})
+    if not store:
+        return []
+    return await db.couriers.find({"store_id": store["id"]}, {"_id": 0}).sort("name", 1).to_list(200)
+
+
+@api.post("/my/couriers")
+async def create_courier(data: CourierIn, user=Depends(require_role("lojista", "admin"))):
+    store = await db.stores.find_one({"owner_id": user["id"]})
+    if not store:
+        raise HTTPException(400, "Crie uma loja primeiro")
+    doc = {
+        "id": str(uuid.uuid4()), "store_id": store["id"],
+        "name": data.name, "cpf": only_digits(data.cpf), "plate": data.plate.upper(),
+        "created_at": now_utc().isoformat(),
+    }
+    await db.couriers.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+@api.patch("/my/couriers/{cid}")
+async def update_courier(cid: str, data: CourierIn, user=Depends(require_role("lojista", "admin"))):
+    store = await db.stores.find_one({"owner_id": user["id"]})
+    if not store:
+        raise HTTPException(404, "Sem loja")
+    r = await db.couriers.update_one(
+        {"id": cid, "store_id": store["id"]},
+        {"$set": {"name": data.name, "cpf": only_digits(data.cpf), "plate": data.plate.upper()}},
+    )
+    if r.matched_count == 0:
+        raise HTTPException(404, "Entregador não encontrado")
+    return await db.couriers.find_one({"id": cid}, {"_id": 0})
+
+
+@api.delete("/my/couriers/{cid}")
+async def delete_courier(cid: str, user=Depends(require_role("lojista", "admin"))):
+    store = await db.stores.find_one({"owner_id": user["id"]})
+    if not store:
+        raise HTTPException(404, "Sem loja")
+    await db.couriers.delete_one({"id": cid, "store_id": store["id"]})
+    return {"ok": True}
+
+
+class AssignCourierIn(BaseModel):
+    courier_id: str
+
+
+@api.patch("/orders/{oid}/assign-courier")
+async def assign_courier(oid: str, data: AssignCourierIn, user=Depends(require_role("lojista", "admin"))):
+    order = await db.orders.find_one({"id": oid})
+    store = await db.stores.find_one({"id": order["store_id"]}) if order else None
+    if not order or not store or store["owner_id"] != user["id"]:
+        raise HTTPException(404, "Pedido não encontrado")
+    courier = await db.couriers.find_one({"id": data.courier_id, "store_id": store["id"]}, {"_id": 0})
+    if not courier:
+        raise HTTPException(404, "Entregador não encontrado")
+    await db.orders.update_one({"id": oid}, {"$set": {"courier": {
+        "id": courier["id"], "name": courier["name"], "cpf": courier["cpf"], "plate": courier["plate"],
+    }}})
+    return await db.orders.find_one({"id": oid}, {"_id": 0})
+
+
+class CourierAuthIn(BaseModel):
+    code: str
+    cpf: str
+
+
+@api.post("/courier/validate")
+async def courier_validate(data: CourierAuthIn):
+    order = await db.orders.find_one({"code": data.code.upper()}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Pedido não encontrado")
+    courier = order.get("courier")
+    if not courier:
+        raise HTTPException(403, "Nenhum entregador atribuído a este pedido")
+    if only_digits(courier.get("cpf")) != only_digits(data.cpf):
+        raise HTTPException(403, "CPF não confere com o entregador deste pedido")
+    store = await db.stores.find_one({"id": order["store_id"]}, {"_id": 0})
+    return {
+        "id": order["id"], "code": order["code"], "status": order["status"],
+        "customer_name": order.get("customer_name"), "address": order.get("address"),
+        "store": {"name": store["fantasy_name"], "lat": store.get("lat"), "lng": store.get("lng")} if store else None,
+        "total": order["total"], "payment_method": order["payment_method"],
+        "courier": {"name": courier.get("name"), "plate": courier.get("plate")},
+        "courier_location": order.get("courier_location"),
+    }
+
+
 # ============== Courier (public, no login) ==============
 @api.get("/courier/order/{code}")
 async def courier_lookup(code: str):
