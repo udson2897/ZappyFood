@@ -1,6 +1,8 @@
 """ZappyFood backend - FastAPI + Motor (MongoDB)"""
 import os
 import uuid
+import random
+import string
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
@@ -711,8 +713,18 @@ async def create_order(data: OrderCreateIn, user=Depends(current_user)):
     points_discount = round(redeem * 0.10, 2)
     total = max(0.0, subtotal + delivery_fee - discount - points_discount)
     oid = str(uuid.uuid4())
+    # short human-friendly code for the courier page
+    code = None
+    for _ in range(10):
+        c = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        if not await db.orders.find_one({"code": c}):
+            code = c
+            break
+    if not code:
+        code = oid[:6].upper()
     order = {
         "id": oid,
+        "code": code,
         "customer_id": user["id"],
         "customer_name": user["name"],
         "store_id": store["id"],
@@ -820,6 +832,61 @@ async def read_all(user=Depends(current_user)):
 async def read_one(nid: str, user=Depends(current_user)):
     await db.notifications.update_one({"id": nid, "user_id": user["id"]}, {"$set": {"read": True}})
     return {"ok": True}
+
+
+# ============== Courier (public, no login) ==============
+@api.get("/courier/order/{code}")
+async def courier_lookup(code: str):
+    order = await db.orders.find_one({"code": code.upper()}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Pedido não encontrado")
+    store = await db.stores.find_one({"id": order["store_id"]}, {"_id": 0})
+    return {
+        "id": order["id"],
+        "code": order["code"],
+        "status": order["status"],
+        "customer_name": order.get("customer_name"),
+        "address": order.get("address"),
+        "store": {
+            "name": store["fantasy_name"], "lat": store.get("lat"), "lng": store.get("lng"),
+        } if store else None,
+        "total": order["total"],
+        "payment_method": order["payment_method"],
+        "courier_location": order.get("courier_location"),
+    }
+
+
+@api.post("/courier/order/{code}/location")
+async def courier_location_post(code: str, body: dict):
+    lat, lng = body.get("lat"), body.get("lng")
+    if lat is None or lng is None:
+        raise HTTPException(400, "lat/lng requeridos")
+    r = await db.orders.update_one(
+        {"code": code.upper()},
+        {"$set": {"courier_location": {"lat": lat, "lng": lng, "at": now_utc().isoformat()}}},
+    )
+    if r.matched_count == 0:
+        raise HTTPException(404, "Pedido não encontrado")
+    return {"ok": True}
+
+
+@api.get("/courier/order/{code}/location")
+async def courier_location_get(code: str):
+    order = await db.orders.find_one({"code": code.upper()}, {"_id": 0, "courier_location": 1})
+    if not order:
+        raise HTTPException(404, "Pedido não encontrado")
+    return order.get("courier_location") or {}
+
+
+@api.post("/courier/order/{code}/finish")
+async def courier_finish(code: str):
+    order = await db.orders.find_one({"code": code.upper()})
+    if not order:
+        raise HTTPException(404, "Pedido não encontrado")
+    if order["status"] in ("FINALIZADO", "CANCELADO"):
+        return {"ok": True, "status": order["status"]}
+    await apply_status_change(order["id"], order, "FINALIZADO")
+    return {"ok": True, "status": "FINALIZADO"}
 
 
 @api.post("/orders/{oid}/rating")

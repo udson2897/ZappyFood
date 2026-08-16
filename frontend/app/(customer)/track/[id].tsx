@@ -8,6 +8,7 @@ import {
   STATUS_COLORS, STATUS_DESC, STATUS_ICONS,
 } from "@/src/theme";
 import { api } from "@/src/lib/api";
+import LiveMap from "@/src/components/LiveMap";
 
 function formatTime(iso: string) {
   try {
@@ -125,7 +126,20 @@ export default function Track() {
         <View style={styles.storeRow}>
           <Ionicons name="storefront-outline" size={18} color={colors.onSurfaceSecondary} />
           <Text style={styles.storeName}>{order.store_name}</Text>
+          {order.code ? <Text style={styles.orderCode}>#{order.code}</Text> : null}
         </View>
+
+        {order.status === "SAIU_PARA_ENTREGA" && order.code && order.address?.lat != null && (
+          <View style={styles.mapCard} testID="track-live-map">
+            <Text style={styles.mapTitle}>Entregador a caminho 🛵</Text>
+            <LiveMap
+              code={order.code}
+              dest={{ lat: order.address.lat, lng: order.address.lng }}
+              store={null}
+              height={240}
+            />
+          </View>
+        )}
 
         {/* Timeline with timestamps */}
         {!cancelled ? (
@@ -295,6 +309,9 @@ const styles = StyleSheet.create({
   progressFill: { height: 6, borderRadius: 3 },
   storeRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.md },
   storeName: { fontSize: font.size.lg, fontWeight: "700", color: colors.onSurface },
+  orderCode: { marginLeft: "auto", color: colors.onSurfaceTertiary, fontWeight: "700" },
+  mapCard: { marginBottom: spacing.lg },
+  mapTitle: { fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg, marginBottom: spacing.sm },
   timeline: { marginVertical: spacing.xs },
   step: { flexDirection: "row", gap: spacing.md },
   stepLeft: { alignItems: "center", width: 24 },

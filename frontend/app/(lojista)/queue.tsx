@@ -89,7 +89,7 @@ export default function Queue() {
               <View key={o.id} style={styles.card} testID={`queue-order-${o.id}`}>
                 <Pressable onPress={() => router.push(`/(lojista)/order/${o.id}`)}>
                   <View style={styles.cardTop}>
-                    <Text style={styles.customer}>{o.customer_name}</Text>
+                    <Text style={styles.customer}>{o.customer_name}{o.code ? ` • #${o.code}` : ""}</Text>
                     <View style={[styles.pill, { backgroundColor: (STATUS_COLORS[o.status] || colors.info) + "22" }]}>
                       <Text style={[styles.pillText, { color: STATUS_COLORS[o.status] || colors.info }]}>{STATUS_LABELS[o.status]}</Text>
                     </View>

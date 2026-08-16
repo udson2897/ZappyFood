@@ -25,6 +25,11 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 8 (2026-08-16)
+- [x] Página web do entregador em `/entregador` (sem login, mobile): digita o número/código do pedido, o sistema busca e exibe o endereço do cliente. Botão "Iniciar rota" abre o Google Maps com a rota até o cliente e ativa o GPS (navigator.geolocation no web / expo-location no nativo) transmitindo a posição em tempo real. Botão "Finalizar entrega" muda o status para Entregue e notifica o cliente.
+- [x] Rastreamento ao vivo com Leaflet + OpenStreetMap (via react-native-webview) — componente `LiveMap` que faz polling da posição do entregador (endpoint público) e move o marcador. O cliente vê o mapa com o entregador na tela de acompanhamento quando o pedido está "Saiu para entrega".
+- [x] Backend: código curto único por pedido (`code`); endpoints públicos `/api/courier/order/{code}` (lookup), `/location` (POST/GET) e `/finish`. Rota `/entregador` liberada do gate de autenticação. Código do pedido exibido na fila do lojista e na tela de acompanhamento do cliente.
+
 ### Iter 7 (2026-08-13)
 - [x] (Revertido a pedido do usuário) Notificações push reais foram implementadas e depois REMOVIDAS a pedido do usuário. Mantidos apenas os avisos in-app (sino + tela Avisos). Backend sem `/register-push`/`send_push`; `app.json` sem plugin expo-notifications/googleServicesFile; `_layout.tsx` limpo.
 

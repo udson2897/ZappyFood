@@ -21,6 +21,7 @@ function Gate() {
   useEffect(() => {
     if (loading) return;
     const seg0 = segments[0] as string | undefined;
+    if (seg0 === "entregador") return; // rota pública do entregador
     const inAuth = seg0 === "(auth)";
     const inCustomer = seg0 === "(customer)";
     const inLojista = seg0 === "(lojista)";
