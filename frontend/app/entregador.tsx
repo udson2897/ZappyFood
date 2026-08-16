@@ -22,8 +22,29 @@ export default function Entregador() {
   const [finishing, setFinishing] = useState(false);
   const [finished, setFinished] = useState(false);
   const [gpsInfo, setGpsInfo] = useState<string>("");
+  const [mode, setMode] = useState<"delivery" | "balance">("delivery");
+  const [balCpf, setBalCpf] = useState("");
+  const [balLoading, setBalLoading] = useState(false);
+  const [balError, setBalError] = useState<string | null>(null);
+  const [balance, setBalance] = useState<any>(null);
   const webWatchId = useRef<number | null>(null);
   const nativeWatch = useRef<Location.LocationSubscription | null>(null);
+
+  const checkBalance = async () => {
+    const digits = balCpf.replace(/\D/g, "");
+    if (digits.length < 11) { setBalError("Informe um CPF válido (11 dígitos)."); return; }
+    setBalError(null); setBalLoading(true); setBalance(null);
+    try {
+      const r = await fetch(`${API}/courier/earnings?cpf=${digits}`);
+      if (r.status === 404) { setBalError("CPF não encontrado. Confirme com a loja se você foi cadastrado."); return; }
+      if (!r.ok) { setBalError("Falha ao consultar. Tente novamente."); return; }
+      setBalance(await r.json());
+    } catch {
+      setBalError("Falha ao consultar. Tente novamente.");
+    } finally {
+      setBalLoading(false);
+    }
+  };
 
   const search = async () => {
     const c = code.trim().toUpperCase();
@@ -133,6 +154,56 @@ export default function Entregador() {
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
+          <View style={styles.tabs}>
+            <Pressable testID="tab-delivery" style={[styles.tab, mode === "delivery" && styles.tabOn]} onPress={() => setMode("delivery")}>
+              <Ionicons name="navigate" size={16} color={mode === "delivery" ? "#fff" : colors.brand} />
+              <Text style={[styles.tabText, mode === "delivery" && styles.tabTextOn]}>Entrega</Text>
+            </Pressable>
+            <Pressable testID="tab-balance" style={[styles.tab, mode === "balance" && styles.tabOn]} onPress={() => setMode("balance")}>
+              <Ionicons name="wallet" size={16} color={mode === "balance" ? "#fff" : colors.brand} />
+              <Text style={[styles.tabText, mode === "balance" && styles.tabTextOn]}>Meu saldo</Text>
+            </Pressable>
+          </View>
+
+          {mode === "balance" ? (
+            <>
+              <Text style={styles.label}>Seu CPF</Text>
+              <View style={styles.searchRow}>
+                <TextInput
+                  testID="balance-cpf-input"
+                  style={styles.input}
+                  placeholder="Somente números"
+                  placeholderTextColor={colors.onSurfaceTertiary}
+                  keyboardType="number-pad"
+                  value={balCpf}
+                  onChangeText={setBalCpf}
+                  onSubmitEditing={checkBalance}
+                />
+                <Pressable testID="balance-check" style={styles.searchBtn} onPress={checkBalance} disabled={balLoading}>
+                  {balLoading ? <ActivityIndicator color="#fff" /> : <Ionicons name="cash" size={22} color="#fff" />}
+                </Pressable>
+              </View>
+              {balError && <Text style={styles.error} testID="balance-error">{balError}</Text>}
+
+              {balance && (
+                <View style={styles.card} testID="balance-card">
+                  <Text style={styles.balName}>Olá, {balance.name} 👋</Text>
+                  <Text style={styles.balHint}>Seus ganhos com entregas (soma das taxas de entrega):</Text>
+                  <BalRow label="Hoje" icon="today" data={balance.day} highlight />
+                  <BalRow label="Esta semana" icon="calendar" data={balance.week} />
+                  <BalRow label="Este mês" icon="calendar-clear" data={balance.month} />
+                </View>
+              )}
+
+              {!balance && !balLoading && (
+                <View style={styles.hint}>
+                  <Ionicons name="wallet-outline" size={48} color={colors.onSurfaceTertiary} />
+                  <Text style={styles.hintText}>Digite seu CPF para ver quanto você já ganhou no dia, na semana e no mês.</Text>
+                </View>
+              )}
+            </>
+          ) : (
+          <>
           <Text style={styles.label}>Número do pedido</Text>
           <View style={styles.searchRow}>
             <TextInput
@@ -239,9 +310,26 @@ export default function Entregador() {
               <Text style={styles.hintText}>Digite o número do pedido para ver o endereço e iniciar a rota.</Text>
             </View>
           )}
+          </>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+function BalRow({ label, icon, data, highlight }: { label: string; icon: any; data: any; highlight?: boolean }) {
+  return (
+    <View style={[styles.balRow, highlight && styles.balRowHi]}>
+      <View style={[styles.balIcon, highlight && { backgroundColor: colors.brand }]}>
+        <Ionicons name={icon} size={18} color={highlight ? "#fff" : colors.brand} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.balLabel}>{label}</Text>
+        <Text style={styles.balCount}>{data?.count || 0} entrega{(data?.count || 0) !== 1 ? "s" : ""}</Text>
+      </View>
+      <Text style={[styles.balValue, highlight && { color: colors.brand }]}>{brl(data?.total || 0)}</Text>
+    </View>
   );
 }
 
@@ -279,4 +367,17 @@ const styles = StyleSheet.create({
   doneText: { color: colors.success, fontWeight: "700", fontSize: font.size.lg, flex: 1 },
   hint: { alignItems: "center", padding: spacing.xxl, marginTop: spacing.lg },
   hintText: { color: colors.onSurfaceSecondary, textAlign: "center", marginTop: spacing.md },
+  tabs: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.lg, backgroundColor: colors.surfaceSecondary, borderRadius: radius.pill, padding: 4 },
+  tab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: spacing.md, borderRadius: radius.pill },
+  tabOn: { backgroundColor: colors.brand },
+  tabText: { color: colors.brand, fontWeight: "700" },
+  tabTextOn: { color: "#fff" },
+  balName: { fontSize: font.size.xl, fontWeight: "800", color: colors.onSurface },
+  balHint: { color: colors.onSurfaceSecondary, marginTop: spacing.xs, marginBottom: spacing.md, fontSize: font.size.sm },
+  balRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.divider },
+  balRowHi: { borderTopWidth: 0 },
+  balIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
+  balLabel: { fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg },
+  balCount: { color: colors.onSurfaceSecondary, fontSize: font.size.sm, marginTop: 2 },
+  balValue: { fontWeight: "800", color: colors.success, fontSize: font.size.xl },
 });

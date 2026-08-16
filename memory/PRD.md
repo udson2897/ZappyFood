@@ -25,6 +25,9 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 10 (2026-08-16)
+- [x] Consulta de saldo do entregador na página pública `/entregador`: alternador "Entrega" / "Meu saldo"; na aba de saldo o entregador digita o CPF e vê seus ganhos (soma das taxas de entrega dos pedidos finalizados atribuídos a ele) por Hoje, Esta semana (a partir de segunda) e Este mês. Backend público `GET /api/courier/earnings?cpf=` (fuso America/Sao_Paulo, usa horário de finalização; 404 se CPF não cadastrado).
+
 ### Iter 9 (2026-08-16)
 - [x] Relatório de pagamento de entregadores (painel lojista): tela "Pagamento de Entregadores" com navegação por dia (Ontem/Hoje/data), resumo de total de entregas e total a pagar, agrupamento por entregador (nº de entregas + soma das taxas de entrega = valor a pagar) e lista expansível dos pedidos de cada entregador. Também mostra pedidos finalizados sem entregador atribuído. A taxa de entrega configurada pelo lojista é o pagamento do entregador. Backend: `GET /api/my/couriers/report?date=YYYY-MM-DD` (fuso America/Sao_Paulo, usa horário de finalização do pedido). Atalhos: card no dashboard + ícone no cabeçalho da tela de Entregadores.
 

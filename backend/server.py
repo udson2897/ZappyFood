@@ -991,6 +991,51 @@ class CourierAuthIn(BaseModel):
     cpf: str
 
 
+@api.get("/courier/earnings")
+async def courier_earnings(cpf: str):
+    """Consulta pública do saldo/ganhos do entregador pelo CPF.
+    Soma as taxas de entrega dos pedidos finalizados atribuídos ao entregador,
+    agrupadas por dia, semana (a partir de segunda) e mês corrente (fuso America/Sao_Paulo)."""
+    digits = only_digits(cpf)
+    if len(digits) < 11:
+        raise HTTPException(400, "CPF inválido")
+    courier = await db.couriers.find_one({"cpf": digits}, {"_id": 0})
+    if not courier:
+        raise HTTPException(404, "CPF não encontrado. Confirme com a loja se você foi cadastrado.")
+    now_br = datetime.now(BR_TZ)
+    day_start = now_br.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = day_start - timedelta(days=day_start.weekday())
+    month_start = day_start.replace(day=1)
+    orders = await db.orders.find(
+        {"status": "FINALIZADO", "courier.cpf": digits}, {"_id": 0}
+    ).to_list(5000)
+    day = {"count": 0, "total": 0.0}
+    week = {"count": 0, "total": 0.0}
+    month = {"count": 0, "total": 0.0}
+    for o in orders:
+        fa = _finalized_at(o)
+        try:
+            dt = datetime.fromisoformat(fa)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            dt_br = dt.astimezone(BR_TZ)
+        except Exception:
+            continue
+        fee = round(float(o.get("delivery_fee", 0) or 0), 2)
+        if dt_br >= month_start:
+            month["count"] += 1
+            month["total"] += fee
+        if dt_br >= week_start:
+            week["count"] += 1
+            week["total"] += fee
+        if dt_br >= day_start:
+            day["count"] += 1
+            day["total"] += fee
+    for b in (day, week, month):
+        b["total"] = round(b["total"], 2)
+    return {"name": courier.get("name"), "cpf": digits, "day": day, "week": week, "month": month}
+
+
 @api.post("/courier/validate")
 async def courier_validate(data: CourierAuthIn):
     order = await db.orders.find_one({"code": data.code.upper()}, {"_id": 0})
