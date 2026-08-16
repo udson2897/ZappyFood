@@ -139,6 +139,13 @@ export default function Entregador() {
     }
   };
 
+  const clearAll = () => {
+    stopWatch();
+    setCode(""); setCpf(""); setOrder(null); setError(null);
+    setRouteStarted(false); setFinished(false); setFinishing(false); setGpsInfo("");
+    setBalCpf(""); setBalError(null); setBalance(null); setLoading(false);
+  };
+
   const addr = order?.address;
   const hasCoords = addr && addr.lat != null && addr.lng != null;
 
@@ -146,10 +153,14 @@ export default function Entregador() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
         <View style={styles.logo}><Text style={styles.logoText}>Z</Text></View>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.title}>ZappyFood Entregas</Text>
           <Text style={styles.subtitle}>Área do entregador</Text>
         </View>
+        <Pressable testID="courier-clear" style={styles.clearBtn} onPress={clearAll}>
+          <Ionicons name="refresh" size={18} color={colors.brand} />
+          <Text style={styles.clearText}>Limpar</Text>
+        </Pressable>
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
@@ -340,6 +351,8 @@ const styles = StyleSheet.create({
   logoText: { color: "#fff", fontSize: 24, fontWeight: "800" },
   title: { fontSize: font.size.xl, fontWeight: "800", color: colors.onSurface },
   subtitle: { color: colors.onSurfaceSecondary, fontSize: font.size.sm },
+  clearBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.brand },
+  clearText: { color: colors.brand, fontWeight: "700", fontSize: font.size.sm },
   label: { color: colors.onSurfaceSecondary, fontWeight: "600", marginBottom: spacing.xs },
   searchRow: { flexDirection: "row", gap: spacing.sm },
   input: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, fontSize: font.size.xl, letterSpacing: 2, color: colors.onSurface, backgroundColor: colors.surfaceSecondary, fontWeight: "700" },
