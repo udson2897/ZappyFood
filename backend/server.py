@@ -391,7 +391,7 @@ async def me(user=Depends(current_user)):
 async def loyalty(user=Depends(current_user)):
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0})
     pts = fresh.get("loyalty_points", 0)
-    return {"points": pts, "value_brl": round(pts * 0.10, 2), "rate": "R$ 1 = 1 ponto • 100 pontos = R$ 10"}
+    return {"points": pts, "value_brl": round((pts // 100) * 2, 2), "rate": "R$ 10 gastos = 1 ponto • 100 pontos = R$ 2 de desconto"}
 
 
 @api.post("/auth/switch-role", response_model=UserOut)
@@ -608,7 +608,7 @@ async def apply_status_change(oid: str, order: dict, new_status: str,
     )
     # Loyalty side-effects
     if new_status == "FINALIZADO" and not order.get("points_credited"):
-        earned = int(order["total"])  # R$1 = 1 ponto
+        earned = int(order["total"] // 10)  # 1 ponto a cada R$ 10 gastos
         if earned > 0:
             await db.users.update_one({"id": order["customer_id"]}, {"$inc": {"loyalty_points": earned}})
         await db.orders.update_one({"id": oid}, {"$set": {"points_credited": True, "points_earned": earned}})
@@ -707,15 +707,16 @@ async def create_order(data: OrderCreateIn, user=Depends(current_user)):
                 discount = coupon["value"]
             elif coupon["type"] == "FREE_SHIPPING":
                 delivery_fee = 0.0
-    # Loyalty points redemption (1 point = R$ 0.10)
+    # Loyalty points redemption: cada 100 pontos = R$ 2 de desconto (resgate em blocos de 100)
     fresh_user = await db.users.find_one({"id": user["id"]})
     available_points = fresh_user.get("loyalty_points", 0)
-    redeem = max(0, min(int(data.redeem_points or 0), available_points))
+    requested = max(0, min(int(data.redeem_points or 0), available_points))
     # cap redemption so total never goes below 0
     max_redeem_value = max(0.0, subtotal + delivery_fee - discount)
-    if redeem * 0.10 > max_redeem_value:
-        redeem = int(max_redeem_value / 0.10)
-    points_discount = round(redeem * 0.10, 2)
+    max_blocks_by_value = int(max_redeem_value // 2)  # R$ 2 por bloco de 100 pts
+    blocks = min(requested // 100, max_blocks_by_value)
+    redeem = blocks * 100
+    points_discount = round(blocks * 2.0, 2)
     total = max(0.0, subtotal + delivery_fee - discount - points_discount)
     oid = str(uuid.uuid4())
     # short human-friendly code for the courier page

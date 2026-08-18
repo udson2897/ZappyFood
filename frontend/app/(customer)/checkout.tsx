@@ -57,10 +57,10 @@ export default function Checkout() {
   const deliverable = quote?.deliverable ?? true;
 
   const baseTotal = subtotal + (count > 0 ? deliveryFee : 0);
-  // 100 points = R$10 -> 1 point = R$0.10. Cap redemption to baseTotal.
-  const maxRedeemablePoints = Math.min(points, Math.floor(baseTotal / 0.1));
-  const redeemPoints = usePoints ? maxRedeemablePoints : 0;
-  const pointsDiscount = redeemPoints * 0.1;
+  // Resgate em blocos de 100 pontos = R$ 2 de desconto. Limita ao total do pedido.
+  const maxBlocks = Math.min(Math.floor(points / 100), Math.floor(baseTotal / 2));
+  const redeemPoints = usePoints ? maxBlocks * 100 : 0;
+  const pointsDiscount = usePoints ? maxBlocks * 2 : 0;
   const total = Math.max(0, baseTotal - pointsDiscount);
 
   const placeOrder = async () => {
@@ -201,10 +201,21 @@ export default function Checkout() {
           <View style={styles.loyaltyCard} testID="checkout-loyalty">
             <Ionicons name="ribbon" size={22} color={colors.brand} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.loyaltyTitle}>Usar {maxRedeemablePoints} pontos</Text>
-              <Text style={styles.loyaltySub}>Você tem {points} pontos • desconto de {brl(maxRedeemablePoints * 0.1)}</Text>
+              {maxBlocks > 0 ? (
+                <>
+                  <Text style={styles.loyaltyTitle}>Usar {maxBlocks * 100} pontos</Text>
+                  <Text style={styles.loyaltySub}>Você tem {points} pontos • desconto de {brl(maxBlocks * 2)}</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.loyaltyTitle}>Você tem {points} pontos</Text>
+                  <Text style={styles.loyaltySub}>Junte 100 pontos para ganhar R$ 2 de desconto</Text>
+                </>
+              )}
             </View>
-            <Switch testID="checkout-use-points" value={usePoints} onValueChange={setUsePoints} trackColor={{ true: colors.brand }} />
+            {maxBlocks > 0 && (
+              <Switch testID="checkout-use-points" value={usePoints} onValueChange={setUsePoints} trackColor={{ true: colors.brand }} />
+            )}
           </View>
         )}
 

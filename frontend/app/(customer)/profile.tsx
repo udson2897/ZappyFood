@@ -48,7 +48,7 @@ export default function Profile() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Fidelidade ZappyFood</Text>
           <Text style={styles.loyaltyText}>{points} pontos acumulados</Text>
-          <Text style={styles.loyaltyHint}>Vale {`R$ ${(points * 0.1).toFixed(2).replace(".", ",")}`} de desconto. Cada R$ 1,00 gasto = 1 ponto.</Text>
+          <Text style={styles.loyaltyHint}>Vale {`R$ ${(Math.floor(points / 100) * 2).toFixed(2).replace(".", ",")}`} de desconto. Cada R$ 10,00 gastos = 1 ponto • 100 pontos = R$ 2.</Text>
         </View>
 
         <View style={styles.rows}>
