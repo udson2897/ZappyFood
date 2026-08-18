@@ -25,6 +25,9 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 15 (2026-08-18)
+- [x] Tela de login com opção separada do entregador: seletor no topo "Cliente / Lojista" x "Entregador". Na aba Entregador o formulário é dedicado (dica de senha = CPF, teclado numérico, botão "Entrar como entregador", sem link de cadastro); na aba geral mantém demos Cliente/Lojista e "Cadastre-se". Mesmo endpoint de login (o backend define o papel).
+
 ### Iter 14 (2026-08-18)
 - [x] Novo tipo de usuário `entregador` + login próprio. No cadastro de entregadores do lojista foi adicionado o campo **e-mail**; ao salvar, o sistema cria/atualiza uma conta de login (role entregador) com **senha = CPF**. Backend: Role inclui `entregador`; `_ensure_courier_user` no create/update; `UserOut.cpf`; endpoints autenticados `GET /api/courier/me/orders`, `GET /api/courier/me/order/{code}` (só pedidos atribuídos por CPF), `GET /api/courier/me/earnings`.
 - [x] Área do entregador logado (`app/(entregador)`): roteamento por `active_role` no Gate. Aba **Entregas** (lista de pedidos atribuídos + busca por número → endereço do cliente, iniciar rota no Google Maps, acompanhamento LiveMap/OSM, finalizar entrega) e aba **Meu saldo** (dia/semana/mês + histórico de hoje). Botão Sair. Demo no login: `entregador@zappyfood.com` / senha `12345678900`. Testado E2E (login, lista, saldo).

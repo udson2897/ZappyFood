@@ -10,6 +10,7 @@ import { useAuth } from "@/src/auth/AuthContext";
 
 export default function SignIn() {
   const { signIn } = useAuth();
+  const [mode, setMode] = useState<"geral" | "entregador">("geral");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -52,10 +53,34 @@ export default function SignIn() {
               <Text style={styles.logoText}>Z</Text>
             </View>
             <Text style={styles.title}>ZappyFood</Text>
-            <Text style={styles.subtitle}>Delivery direto do lojista para você</Text>
+            <Text style={styles.subtitle}>
+              {mode === "entregador" ? "Área do entregador" : "Delivery direto do lojista para você"}
+            </Text>
+          </View>
+
+          <View style={styles.modeTabs}>
+            <Pressable
+              testID="login-mode-geral"
+              style={[styles.modeTab, mode === "geral" && styles.modeTabOn]}
+              onPress={() => { setMode("geral"); setError(null); setEmail(""); setPassword(""); }}
+            >
+              <Text style={[styles.modeTabText, mode === "geral" && styles.modeTabTextOn]}>Cliente / Lojista</Text>
+            </Pressable>
+            <Pressable
+              testID="login-mode-entregador"
+              style={[styles.modeTab, mode === "entregador" && styles.modeTabOn]}
+              onPress={() => { setMode("entregador"); setError(null); setEmail(""); setPassword(""); }}
+            >
+              <Text style={[styles.modeTabText, mode === "entregador" && styles.modeTabTextOn]}>Entregador</Text>
+            </Pressable>
           </View>
 
           <View style={styles.card}>
+            {mode === "entregador" && (
+              <View style={styles.infoBox}>
+                <Text style={styles.infoText}>Entre com o e-mail cadastrado pela loja. Sua senha é o seu CPF (somente números).</Text>
+              </View>
+            )}
             <Text style={styles.label}>E-mail</Text>
             <TextInput
               testID="sign-in-email"
@@ -67,13 +92,14 @@ export default function SignIn() {
               value={email}
               onChangeText={setEmail}
             />
-            <Text style={styles.label}>Senha</Text>
+            <Text style={styles.label}>{mode === "entregador" ? "Senha (seu CPF)" : "Senha"}</Text>
             <TextInput
               testID="sign-in-password"
               style={styles.input}
-              placeholder="••••••••"
+              placeholder={mode === "entregador" ? "Somente números" : "••••••••"}
               placeholderTextColor={colors.onSurfaceTertiary}
-              secureTextEntry
+              secureTextEntry={mode !== "entregador"}
+              keyboardType={mode === "entregador" ? "number-pad" : "default"}
               value={password}
               onChangeText={setPassword}
             />
@@ -87,41 +113,46 @@ export default function SignIn() {
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.buttonText}>Entrar</Text>
+                <Text style={styles.buttonText}>{mode === "entregador" ? "Entrar como entregador" : "Entrar"}</Text>
               )}
             </Pressable>
 
-            <View style={styles.demoRow}>
+            {mode === "entregador" ? (
               <Pressable
-                testID="sign-in-demo-cliente"
-                style={styles.demoBtn}
-                onPress={() => fillDemo("cliente")}
+                testID="sign-in-demo-entregador"
+                style={[styles.demoBtn, { marginTop: spacing.md }]}
+                onPress={() => fillDemo("entregador")}
               >
-                <Text style={styles.demoText}>Usar demo Cliente</Text>
+                <Text style={styles.demoText}>Usar demo Entregador</Text>
               </Pressable>
-              <Pressable
-                testID="sign-in-demo-lojista"
-                style={styles.demoBtn}
-                onPress={() => fillDemo("lojista")}
-              >
-                <Text style={styles.demoText}>Usar demo Lojista</Text>
-              </Pressable>
-            </View>
-            <Pressable
-              testID="sign-in-demo-entregador"
-              style={[styles.demoBtn, { marginTop: spacing.sm }]}
-              onPress={() => fillDemo("entregador")}
-            >
-              <Text style={styles.demoText}>Usar demo Entregador</Text>
-            </Pressable>
+            ) : (
+              <>
+                <View style={styles.demoRow}>
+                  <Pressable
+                    testID="sign-in-demo-cliente"
+                    style={styles.demoBtn}
+                    onPress={() => fillDemo("cliente")}
+                  >
+                    <Text style={styles.demoText}>Usar demo Cliente</Text>
+                  </Pressable>
+                  <Pressable
+                    testID="sign-in-demo-lojista"
+                    style={styles.demoBtn}
+                    onPress={() => fillDemo("lojista")}
+                  >
+                    <Text style={styles.demoText}>Usar demo Lojista</Text>
+                  </Pressable>
+                </View>
 
-            <Link href="/(auth)/sign-up" asChild>
-              <Pressable style={styles.linkRow} testID="sign-in-goto-signup">
-                <Text style={styles.linkText}>
-                  Não tem conta? <Text style={{ color: colors.brand, fontWeight: "700" }}>Cadastre-se</Text>
-                </Text>
-              </Pressable>
-            </Link>
+                <Link href="/(auth)/sign-up" asChild>
+                  <Pressable style={styles.linkRow} testID="sign-in-goto-signup">
+                    <Text style={styles.linkText}>
+                      Não tem conta? <Text style={{ color: colors.brand, fontWeight: "700" }}>Cadastre-se</Text>
+                    </Text>
+                  </Pressable>
+                </Link>
+              </>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -142,6 +173,13 @@ const styles = StyleSheet.create({
   title: { fontSize: font.size.huge, fontWeight: "800", color: colors.onSurface },
   subtitle: { color: colors.onSurfaceSecondary, marginTop: spacing.xs, fontSize: font.size.base },
   card: { gap: spacing.sm },
+  modeTabs: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.lg, backgroundColor: colors.surfaceSecondary, borderRadius: radius.pill, padding: 4 },
+  modeTab: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: spacing.md, borderRadius: radius.pill },
+  modeTabOn: { backgroundColor: colors.brand },
+  modeTabText: { color: colors.brand, fontWeight: "700", fontSize: font.size.sm },
+  modeTabTextOn: { color: "#fff" },
+  infoBox: { backgroundColor: colors.brandTertiary, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm },
+  infoText: { color: colors.onSurfaceSecondary, fontSize: font.size.sm },
   label: { color: colors.onSurfaceSecondary, fontSize: font.size.sm, fontWeight: "600", marginTop: spacing.sm },
   input: {
     borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
