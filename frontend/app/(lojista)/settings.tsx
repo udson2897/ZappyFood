@@ -10,6 +10,7 @@ import * as Location from "expo-location";
 import { colors, spacing, radius, font } from "@/src/theme";
 import { api } from "@/src/lib/api";
 import { useAuth } from "@/src/auth/AuthContext";
+import ImageUpload from "@/src/components/ImageUpload";
 
 const STORE_STATUS = [
   { id: "ABERTA", label: "Aberta", color: colors.success },
@@ -157,8 +158,8 @@ export default function Settings() {
           <Field label="Descrição" value={form.description} onChange={(t: string) => setForm({ ...form, description: t })} testID="store-desc" />
           <Field label="Telefone / WhatsApp" value={form.phone} onChange={(t: string) => setForm({ ...form, phone: t })} testID="store-phone" keyboardType="phone-pad" />
           <Field label="Tempo estimado base (min)" value={form.est_delivery_min} onChange={(t: string) => setForm({ ...form, est_delivery_min: t })} testID="store-time" keyboardType="number-pad" />
-          <Field label="URL do banner" value={form.banner_url} onChange={(t: string) => setForm({ ...form, banner_url: t })} testID="store-banner" />
-          <Field label="URL do logo" value={form.logo_url} onChange={(t: string) => setForm({ ...form, logo_url: t })} testID="store-logo" />
+          <ImageUpload label="Banner da loja" value={form.banner_url} onChange={(url) => setForm({ ...form, banner_url: url })} aspect={[16, 9]} height={150} testID="store-banner" />
+          <ImageUpload label="Logo da loja" value={form.logo_url} onChange={(url) => setForm({ ...form, logo_url: url })} aspect={[1, 1]} height={110} round testID="store-logo" />
 
           <Text style={styles.section}>Entrega por distância</Text>
           <View style={styles.modeRow}>

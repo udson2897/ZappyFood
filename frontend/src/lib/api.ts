@@ -1,4 +1,5 @@
 import { storage } from './storage';
+import { Platform } from 'react-native';
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 const API = `${BASE}/api`;
@@ -161,6 +162,29 @@ export const api = {
   assignCourier: (oid: string, courier_id: string) => apiFetch<any>(`/orders/${oid}/assign-courier`, { method: 'PATCH', body: JSON.stringify({ courier_id }) }),
   courierReport: (date?: string) => apiFetch<any>(`/my/couriers/report${date ? `?date=${date}` : ''}`),
 };
+
+export async function uploadImage(uri: string, name = 'photo.jpg', type = 'image/jpeg'): Promise<string> {
+  const token = await storage.get('access_token');
+  const form = new FormData();
+  if (Platform.OS === 'web') {
+    const blob = await (await fetch(uri)).blob();
+    form.append('file', blob, name);
+  } else {
+    form.append('file', { uri, name, type } as any);
+  }
+  const res = await fetch(`${API}/upload`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: form,
+  });
+  if (!res.ok) {
+    let msg = 'Falha ao enviar imagem';
+    try { const j = await res.json(); msg = j.detail || msg; } catch {}
+    throw new Error(msg);
+  }
+  const d = await res.json();
+  return `${BASE}${d.url}`;
+}
 
 // CEP lookup (BrasilAPI v2 gives coordinates; falls back to ViaCEP)
 export async function lookupCep(cep: string) {

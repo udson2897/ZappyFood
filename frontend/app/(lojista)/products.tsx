@@ -9,6 +9,7 @@ import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, font, brl } from "@/src/theme";
 import { api } from "@/src/lib/api";
+import ImageUpload from "@/src/components/ImageUpload";
 
 type OptForm = { name: string; price_delta: string };
 type GroupForm = { name: string; required: boolean; options: OptForm[] };
@@ -180,7 +181,7 @@ export default function Products() {
               <Field label="Descrição" value={form.description} onChange={(t: string) => setForm({ ...form, description: t })} testID="product-desc" />
               <Field label="Categoria" value={form.category} onChange={(t: string) => setForm({ ...form, category: t })} testID="product-category" />
               <Field label="Preço base (R$)" value={form.price} onChange={(t: string) => setForm({ ...form, price: t })} keyboardType="decimal-pad" testID="product-price" />
-              <Field label="URL da imagem" value={form.image_url} onChange={(t: string) => setForm({ ...form, image_url: t })} testID="product-image" />
+              <ImageUpload label="Imagem do produto" value={form.image_url} onChange={(url) => setForm({ ...form, image_url: url })} aspect={[4, 3]} height={160} testID="product-image" />
               <View style={styles.switchRow}>
                 <Text style={styles.label}>Disponível</Text>
                 <Switch value={form.available} onValueChange={(v) => setForm({ ...form, available: v })} trackColor={{ true: colors.brand }} />

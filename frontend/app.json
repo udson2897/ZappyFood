@@ -12,7 +12,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.deliverysaasbuild.wbz4to",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Usamos sua localização para preencher o endereço de entrega"
+        "NSLocationWhenInUseUsageDescription": "Usamos sua localização para preencher o endereço de entrega",
+        "NSPhotoLibraryUsageDescription": "Selecione fotos para o logo, banner e produtos da loja"
       }
     },
     "android": {
@@ -31,6 +32,12 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Selecione fotos para o logo, banner e produtos da loja"
+        }
+      ],
       [
         "expo-splash-screen",
         {

@@ -25,6 +25,9 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 12 (2026-08-18)
+- [x] Upload de imagens (Object Storage gerenciado da Emergent) substituindo os campos de URL na área do lojista: produto (foto), loja (banner e logo). Componente `ImageUpload` abre a galeria/arquivos via `expo-image-picker`, envia ao backend e salva a URL do servidor. Backend: `POST /api/upload` (multipart, requer lojista; valida tipo/tamanho, guarda em `db.uploads`) e `GET /api/files/{path}` (leitura pública das imagens do catálogo, com cache). `init_storage` no startup; chave em `EMERGENT_LLM_KEY`. Permissão de fotos (iOS/plugin) adicionada no app.json. Testado E2E no web (galeria → upload → preview).
+
 ### Iter 11 (2026-08-18)
 - [x] Histórico detalhado no "Meu saldo" da página `/entregador`: além dos totais (dia/semana/mês) e do botão Limpar, agora lista as "Entregas de hoje" com horário, código do pedido, cliente e valor (taxa de entrega). Backend `GET /api/courier/earnings` passou a retornar `day_orders` (ordenado do mais recente).
 

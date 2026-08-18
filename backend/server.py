@@ -11,9 +11,12 @@ from typing import List, Optional, Literal
 
 import bcrypt
 import jwt
+import requests
 from dotenv import load_dotenv
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, Request
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, Request, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import Response
+from fastapi.concurrency import run_in_threadpool
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
@@ -846,6 +849,98 @@ def only_digits(s: str) -> str:
     return "".join(ch for ch in (s or "") if ch.isdigit())
 
 
+# ============== Object Storage (Emergent managed) ==============
+STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
+STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
+EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
+APP_NAME = "zappyfood"
+_storage_key = None
+
+
+def init_storage():
+    global _storage_key
+    if _storage_key:
+        return _storage_key
+    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY}, timeout=30)
+    resp.raise_for_status()
+    _storage_key = resp.json()["storage_key"]
+    return _storage_key
+
+
+def put_object(path: str, data: bytes, content_type: str) -> dict:
+    global _storage_key
+    key = init_storage()
+    resp = requests.put(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key, "Content-Type": content_type}, data=data, timeout=120,
+    )
+    if resp.status_code == 503:
+        _storage_key = None
+        key = init_storage()
+        resp = requests.put(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key, "Content-Type": content_type}, data=data, timeout=120,
+        )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def get_object(path: str) -> tuple:
+    global _storage_key
+    key = init_storage()
+    resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
+    if resp.status_code == 503:
+        _storage_key = None
+        key = init_storage()
+        resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"}
+EXT_BY_TYPE = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
+               "image/gif": "gif", "image/heic": "heic", "image/heif": "heif"}
+
+
+@api.post("/upload")
+async def upload_image(file: UploadFile = File(...), user=Depends(require_role("lojista", "admin"))):
+    content_type = (file.content_type or "").lower()
+    if content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(400, "Formato inválido. Envie uma imagem JPG, PNG, WEBP ou GIF.")
+    data = await file.read()
+    if len(data) > 10 * 1024 * 1024:
+        raise HTTPException(413, "Imagem muito grande (máx 10 MB).")
+    ext = EXT_BY_TYPE.get(content_type, "jpg")
+    path = f"{APP_NAME}/uploads/{user['id']}/{uuid.uuid4().hex}.{ext}"
+    try:
+        result = await run_in_threadpool(put_object, path, data, content_type)
+    except requests.HTTPError as e:
+        code = e.response.status_code if e.response is not None else 500
+        if code == 402:
+            raise HTTPException(402, "Sem créditos de armazenamento no momento.")
+        raise HTTPException(502, "Falha ao enviar a imagem. Tente novamente.")
+    stored = result.get("path", path)
+    await db.uploads.insert_one({
+        "id": str(uuid.uuid4()), "owner_id": user["id"], "storage_path": stored,
+        "content_type": content_type, "size": len(data), "created_at": now_utc().isoformat(),
+    })
+    return {"path": stored, "url": f"/api/files/{stored}"}
+
+
+@api.get("/files/{path:path}")
+async def get_file(path: str):
+    # Public read for catalog images (logos, banners, product photos)
+    doc = await db.uploads.find_one({"storage_path": path})
+    if not doc:
+        raise HTTPException(404, "Arquivo não encontrado")
+    try:
+        content, ctype = await run_in_threadpool(get_object, path)
+    except Exception:
+        raise HTTPException(404, "Arquivo não encontrado")
+    return Response(content=content, media_type=ctype,
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
 @api.get("/my/couriers")
 async def list_couriers(user=Depends(require_role("lojista", "admin"))):
     store = await db.stores.find_one({"owner_id": user["id"]})
@@ -1398,6 +1493,11 @@ async def auto_finalize_loop():
 async def startup():
     await db.users.create_index("email", unique=True)
     await seed_data()
+    try:
+        await run_in_threadpool(init_storage)
+        log.info("Object storage initialized")
+    except Exception as e:
+        log.error(f"Object storage init failed: {e}")
     asyncio.create_task(auto_finalize_loop())
 
 
