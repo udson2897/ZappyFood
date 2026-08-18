@@ -27,13 +27,16 @@ export default function SignIn() {
     }
   };
 
-  const fillDemo = (kind: "cliente" | "lojista") => {
+  const fillDemo = (kind: "cliente" | "lojista" | "entregador") => {
     if (kind === "cliente") {
       setEmail("cliente@zappyfood.com");
       setPassword("cliente123");
-    } else {
+    } else if (kind === "lojista") {
       setEmail("lojista@zappyfood.com");
       setPassword("lojista123");
+    } else {
+      setEmail("entregador@zappyfood.com");
+      setPassword("12345678900");
     }
   };
 
@@ -104,6 +107,13 @@ export default function SignIn() {
                 <Text style={styles.demoText}>Usar demo Lojista</Text>
               </Pressable>
             </View>
+            <Pressable
+              testID="sign-in-demo-entregador"
+              style={[styles.demoBtn, { marginTop: spacing.sm }]}
+              onPress={() => fillDemo("entregador")}
+            >
+              <Text style={styles.demoText}>Usar demo Entregador</Text>
+            </Pressable>
 
             <Link href="/(auth)/sign-up" asChild>
               <Pressable style={styles.linkRow} testID="sign-in-goto-signup">

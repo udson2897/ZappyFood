@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 const API = `${BASE}/api`;
 
-export type Role = 'cliente' | 'lojista' | 'admin';
+export type Role = 'cliente' | 'lojista' | 'admin' | 'entregador';
 
 export type User = {
   id: string;
@@ -13,6 +13,7 @@ export type User = {
   phone?: string;
   role: Role;
   active_role: Role;
+  cpf?: string;
 };
 
 let onLogout: (() => void) | null = null;
@@ -161,6 +162,10 @@ export const api = {
   deleteCourier: (id: string) => apiFetch<any>(`/my/couriers/${id}`, { method: 'DELETE' }),
   assignCourier: (oid: string, courier_id: string) => apiFetch<any>(`/orders/${oid}/assign-courier`, { method: 'PATCH', body: JSON.stringify({ courier_id }) }),
   courierReport: (date?: string) => apiFetch<any>(`/my/couriers/report${date ? `?date=${date}` : ''}`),
+  // entregador (autenticado)
+  courierMyOrders: () => apiFetch<any[]>('/courier/me/orders'),
+  courierMyOrder: (code: string) => apiFetch<any>(`/courier/me/order/${code}`),
+  courierMyEarnings: () => apiFetch<any>('/courier/me/earnings'),
 };
 
 export async function uploadImage(uri: string, name = 'photo.jpg', type = 'image/jpeg'): Promise<string> {

@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, TextInput,
-  Modal, KeyboardAvoidingView, Platform,
+  Modal, KeyboardAvoidingView, Platform, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -9,7 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, font } from "@/src/theme";
 import { api } from "@/src/lib/api";
 
-const EMPTY = { id: undefined as string | undefined, name: "", cpf: "", plate: "" };
+const EMPTY = { id: undefined as string | undefined, name: "", cpf: "", plate: "", email: "" };
 
 export default function Couriers() {
   const router = useRouter();
@@ -25,13 +25,15 @@ export default function Couriers() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const save = async () => {
-    if (!form.name || !form.cpf || !form.plate) return;
+    if (!form.name || !form.cpf || !form.plate || !form.email) return;
     setSaving(true);
     try {
-      const body = { name: form.name, cpf: form.cpf, plate: form.plate };
+      const body = { name: form.name, cpf: form.cpf, plate: form.plate, email: form.email.trim().toLowerCase() };
       if (form.id) await api.updateCourier(form.id, body);
       else await api.createCourier(body);
       setOpen(false); setForm({ ...EMPTY }); load();
+    } catch (e: any) {
+      Alert.alert("Erro", e?.message || "Não foi possível salvar o entregador.");
     } finally { setSaving(false); }
   };
 
@@ -51,8 +53,9 @@ export default function Couriers() {
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{c.name}</Text>
               <Text style={styles.meta}>CPF {c.cpf} • Placa {c.plate}</Text>
+              {c.email ? <Text style={styles.meta}>{c.email}</Text> : null}
             </View>
-            <Pressable testID={`courier-edit-${c.id}`} onPress={() => { setForm({ id: c.id, name: c.name, cpf: c.cpf, plate: c.plate }); setOpen(true); }} style={styles.iconBtn}><Ionicons name="create-outline" size={20} color={colors.info} /></Pressable>
+            <Pressable testID={`courier-edit-${c.id}`} onPress={() => { setForm({ id: c.id, name: c.name, cpf: c.cpf, plate: c.plate, email: c.email || "" }); setOpen(true); }} style={styles.iconBtn}><Ionicons name="create-outline" size={20} color={colors.info} /></Pressable>
             <Pressable testID={`courier-delete-${c.id}`} onPress={async () => { await api.deleteCourier(c.id); load(); }} style={styles.iconBtn}><Ionicons name="trash-outline" size={20} color={colors.error} /></Pressable>
           </View>
         ))}
@@ -70,10 +73,13 @@ export default function Couriers() {
             </View>
             <Text style={styles.label}>Nome</Text>
             <TextInput testID="courier-name" style={styles.input} value={form.name} onChangeText={(t) => setForm({ ...form, name: t })} />
+            <Text style={styles.label}>E-mail (login do entregador)</Text>
+            <TextInput testID="courier-email" style={styles.input} value={form.email} onChangeText={(t) => setForm({ ...form, email: t })} keyboardType="email-address" autoCapitalize="none" placeholder="entregador@email.com" placeholderTextColor={colors.onSurfaceTertiary} />
             <Text style={styles.label}>CPF</Text>
             <TextInput testID="courier-cpf" style={styles.input} value={form.cpf} onChangeText={(t) => setForm({ ...form, cpf: t })} keyboardType="number-pad" placeholder="Somente números" placeholderTextColor={colors.onSurfaceTertiary} />
             <Text style={styles.label}>Placa da moto</Text>
             <TextInput testID="courier-plate" style={styles.input} value={form.plate} onChangeText={(t) => setForm({ ...form, plate: t })} autoCapitalize="characters" placeholder="ABC1D23" placeholderTextColor={colors.onSurfaceTertiary} />
+            <Text style={styles.hintText}>O entregador entra no app com o e-mail e usa o próprio CPF como senha.</Text>
             <Pressable testID="courier-save" style={styles.saveBtn} onPress={save} disabled={saving}>
               {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Salvar</Text>}
             </Pressable>
@@ -105,4 +111,5 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, color: colors.onSurface, backgroundColor: colors.surfaceSecondary, fontSize: font.size.lg },
   saveBtn: { backgroundColor: colors.brand, borderRadius: radius.md, paddingVertical: spacing.lg, alignItems: "center", marginTop: spacing.lg, marginBottom: spacing.xl },
   saveText: { color: "#fff", fontWeight: "800", fontSize: font.size.lg },
+  hintText: { color: colors.onSurfaceSecondary, fontSize: font.size.sm, marginTop: spacing.sm, fontStyle: "italic" },
 });

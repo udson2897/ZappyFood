@@ -25,6 +25,10 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 14 (2026-08-18)
+- [x] Novo tipo de usuário `entregador` + login próprio. No cadastro de entregadores do lojista foi adicionado o campo **e-mail**; ao salvar, o sistema cria/atualiza uma conta de login (role entregador) com **senha = CPF**. Backend: Role inclui `entregador`; `_ensure_courier_user` no create/update; `UserOut.cpf`; endpoints autenticados `GET /api/courier/me/orders`, `GET /api/courier/me/order/{code}` (só pedidos atribuídos por CPF), `GET /api/courier/me/earnings`.
+- [x] Área do entregador logado (`app/(entregador)`): roteamento por `active_role` no Gate. Aba **Entregas** (lista de pedidos atribuídos + busca por número → endereço do cliente, iniciar rota no Google Maps, acompanhamento LiveMap/OSM, finalizar entrega) e aba **Meu saldo** (dia/semana/mês + histórico de hoje). Botão Sair. Demo no login: `entregador@zappyfood.com` / senha `12345678900`. Testado E2E (login, lista, saldo).
+
 ### Iter 13 (2026-08-18)
 - [x] Novo sistema de fidelidade: cliente ganha 1 ponto a cada R$ 10 gastos (antes R$ 1 = 1 ponto) e resgata em blocos de 100 pontos = R$ 2 de desconto (antes 100 pts = R$ 10). Backend: ganho `int(total//10)` ao finalizar; resgate snapa para múltiplos de 100 com valor R$ 2/bloco e cap pelo total; `/api/loyalty` mostra valor `(pts//100)*2` e taxa atualizada. Frontend: checkout (blocos de 100, mensagem quando <100 pts) e perfil com texto atualizado. Testado E2E (resgate 250→200=R$4; ganho 57,77→5 pts).
 

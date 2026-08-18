@@ -25,22 +25,22 @@ function Gate() {
     const inAuth = seg0 === "(auth)";
     const inCustomer = seg0 === "(customer)";
     const inLojista = seg0 === "(lojista)";
+    const inEntregador = seg0 === "(entregador)";
     if (!user && !inAuth) {
       router.replace("/(auth)/sign-in");
       return;
     }
     if (user) {
-      const target = user.active_role === "lojista" ? "(lojista)" : "(customer)";
-      if (inAuth || (!inCustomer && !inLojista)) {
-        router.replace(target === "(lojista)" ? "/(lojista)" : "/(customer)");
+      const role = user.active_role;
+      const target = role === "lojista" ? "/(lojista)" : role === "entregador" ? "/(entregador)" : "/(customer)";
+      if (inAuth || (!inCustomer && !inLojista && !inEntregador)) {
+        router.replace(target as any);
         return;
       }
       // If role changed while inside wrong group, redirect
-      if (user.active_role === "lojista" && inCustomer) {
-        router.replace("/(lojista)");
-      } else if (user.active_role !== "lojista" && inLojista) {
-        router.replace("/(customer)");
-      }
+      if (role === "lojista" && !inLojista) router.replace("/(lojista)");
+      else if (role === "entregador" && !inEntregador) router.replace("/(entregador)");
+      else if (role !== "lojista" && role !== "entregador" && !inCustomer) router.replace("/(customer)");
     }
   }, [user, loading, segments, router]);
 
