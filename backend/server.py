@@ -1012,6 +1012,7 @@ async def courier_earnings(cpf: str):
     day = {"count": 0, "total": 0.0}
     week = {"count": 0, "total": 0.0}
     month = {"count": 0, "total": 0.0}
+    day_orders = []
     for o in orders:
         fa = _finalized_at(o)
         try:
@@ -1031,9 +1032,20 @@ async def courier_earnings(cpf: str):
         if dt_br >= day_start:
             day["count"] += 1
             day["total"] += fee
+            day_orders.append({
+                "id": o["id"], "code": o.get("code"), "delivery_fee": fee,
+                "total": o.get("total"), "customer_name": o.get("customer_name"),
+                "store_name": o.get("store_name"),
+                "at": dt_br.strftime("%H:%M"),
+                "_ts": dt_br.timestamp(),
+            })
     for b in (day, week, month):
         b["total"] = round(b["total"], 2)
-    return {"name": courier.get("name"), "cpf": digits, "day": day, "week": week, "month": month}
+    day_orders.sort(key=lambda x: x["_ts"], reverse=True)
+    for d in day_orders:
+        d.pop("_ts", None)
+    return {"name": courier.get("name"), "cpf": digits, "day": day,
+            "week": week, "month": month, "day_orders": day_orders}
 
 
 @api.post("/courier/validate")

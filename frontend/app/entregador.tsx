@@ -203,6 +203,22 @@ export default function Entregador() {
                   <BalRow label="Hoje" icon="today" data={balance.day} highlight />
                   <BalRow label="Esta semana" icon="calendar" data={balance.week} />
                   <BalRow label="Este mês" icon="calendar-clear" data={balance.month} />
+
+                  {balance.day_orders?.length > 0 && (
+                    <View style={styles.histBox} testID="balance-history">
+                      <Text style={styles.histTitle}>Entregas de hoje</Text>
+                      {balance.day_orders.map((o: any) => (
+                        <View key={o.id} style={styles.histRow}>
+                          <Text style={styles.histTime}>{o.at}</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.histCode}>#{o.code}</Text>
+                            <Text style={styles.histSub} numberOfLines={1}>{o.customer_name}</Text>
+                          </View>
+                          <Text style={styles.histFee}>{brl(o.delivery_fee)}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
                 </View>
               )}
 
@@ -393,4 +409,11 @@ const styles = StyleSheet.create({
   balLabel: { fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg },
   balCount: { color: colors.onSurfaceSecondary, fontSize: font.size.sm, marginTop: 2 },
   balValue: { fontWeight: "800", color: colors.success, fontSize: font.size.xl },
+  histBox: { marginTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.md },
+  histTitle: { fontWeight: "800", color: colors.onSurface, fontSize: font.size.lg, marginBottom: spacing.sm },
+  histRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  histTime: { color: colors.onSurfaceSecondary, fontWeight: "600", fontSize: font.size.sm, width: 44 },
+  histCode: { fontWeight: "700", color: colors.brand, fontSize: font.size.base },
+  histSub: { color: colors.onSurfaceSecondary, fontSize: font.size.sm, marginTop: 1 },
+  histFee: { fontWeight: "800", color: colors.onSurface, fontSize: font.size.lg },
 });
