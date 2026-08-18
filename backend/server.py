@@ -396,10 +396,16 @@ async def loyalty(user=Depends(current_user)):
     return {"points": pts, "value_brl": round((pts // 100) * 2, 2), "rate": "R$ 10 gastos = 1 ponto • 100 pontos = R$ 2 de desconto"}
 
 
+DEMO_EMAILS = {"cliente@zappyfood.com", "lojista@zappyfood.com", "entregador@zappyfood.com"}
+
+
 @api.post("/auth/switch-role", response_model=UserOut)
 async def switch_role(data: RoleSwitchIn, user=Depends(current_user)):
     if data.active_role == "admin":
         raise HTTPException(403, "Não pode alternar para admin")
+    # Contas de demonstração têm papel fixo para não corromper o roteamento dos botões demo
+    if (user.get("email") or "").lower() in DEMO_EMAILS:
+        return to_user_out(user)
     update = {"active_role": data.active_role}
     if data.active_role == "lojista" and user["role"] == "cliente":
         update["role"] = "lojista"
@@ -1488,6 +1494,15 @@ DEMO_EXTRAS = {
 
 
 async def seed_data():
+    # Reparo idempotente das contas demo (garante papéis corretos a cada startup)
+    await db.users.update_one(
+        {"email": "lojista@zappyfood.com"},
+        {"$set": {"role": "lojista", "active_role": "lojista"}},
+    )
+    await db.users.update_one(
+        {"email": "cliente@zappyfood.com"},
+        {"$set": {"role": "cliente", "active_role": "cliente"}},
+    )
     if await db.stores.count_documents({}) > 0:
         return
     # Demo lojista
