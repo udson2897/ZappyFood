@@ -25,6 +25,9 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 21 (2026-08-23) — Bug fix: atribuição de entregador (detalhe do pedido)
+- [x] (1) A lista de entregadores no detalhe do pedido agora mostra **nome + ID (courier_code)** e exibe apenas entregadores com vínculo **aceito**. (2) Atribuição corrigida com feedback: ao tocar no entregador, chama `assign-courier` (fluxo de oferta) com tratamento de erro (Alert) e recarrega; estados exibidos: "Oferta enviada para X — aguardando aceite" (pendente), "Aceito: X • placa (ZF-...)" (aceito) e "X recusou — escolha outro" (recusado); chip escolhido destacado. Verificado pelo testing_agent (backend 5/5, frontend ponta a ponta).
+
 ### Iter 20 (2026-08-23) — Recusa na fila do lojista
 - [x] Quando o entregador recusa a oferta, o pedido guarda `courier_refused` (nome + hora) e limpa oferta/entregador. Na Fila do lojista esses pedidos sobem para o topo, ganham borda vermelha, banner "{nome} recusou — atribua a outro" e botão **Reatribuir** (abre o detalhe para escolher outro). Também mostra status do entregador no card: "Entregador: X" (aceito) e "Aguardando X aceitar…" (oferta pendente). Ao reatribuir/ofertar novamente, `courier_refused` é limpo. Testado (backend + screenshot).
 

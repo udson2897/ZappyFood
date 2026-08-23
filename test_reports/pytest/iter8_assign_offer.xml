@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="5" failures="0" skipped="0" tests="5" time="1.640" timestamp="2026-08-23T16:12:48.842079+00:00" hostname="agent-env-934a96d9-9438-4314-85b3-5fd5505a10f6"><testcase classname="tests.test_iter8_assign_offer_flow" name="test_list_couriers_returns_name_id_status" time="0.846"><error message="failed on setup with &quot;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">backend/tests/test_iter8_assign_offer_flow.py:90: in accepted_courier
+    assert me.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_iter8_assign_offer_flow" name="test_assign_pending_courier_is_rejected" time="0.394"><error message="failed on setup with &quot;AssertionError: {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">backend/tests/test_iter8_assign_offer_flow.py:65: in store_ids
+    assert r.status_code == 200, r.text
+E   AssertionError: {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_iter8_assign_offer_flow" name="test_assign_accepted_creates_pending_offer" time="0.000"><error message="failed on setup with &quot;AssertionError: {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">backend/tests/test_iter8_assign_offer_flow.py:65: in store_ids
+    assert r.status_code == 200, r.text
+E   AssertionError: {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_iter8_assign_offer_flow" name="test_courier_sees_offer_and_accept_sets_courier" time="0.000"><error message="failed on setup with &quot;AssertionError: {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">backend/tests/test_iter8_assign_offer_flow.py:65: in store_ids
+    assert r.status_code == 200, r.text
+E   AssertionError: {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_iter8_assign_offer_flow" name="test_courier_refuse_clears_offer_and_sets_refused" time="0.000"><error message="failed on setup with &quot;AssertionError: {&quot;detail&quot;:&quot;Not Found&quot;}&#10;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">backend/tests/test_iter8_assign_offer_flow.py:65: in store_ids
+    assert r.status_code == 200, r.text
+E   AssertionError: {"detail":"Not Found"}
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase></testsuite></testsuites>

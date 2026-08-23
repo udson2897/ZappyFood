@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, TextInput,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -27,7 +27,23 @@ export default function LojistaOrderDetail() {
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState("");
   const [couriers, setCouriers] = useState<any[]>([]);
+  const [assigning, setAssigning] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+
+  const acceptedCouriers = couriers.filter((c) => c.status === "accepted");
+
+  const assign = async (courierId: string) => {
+    setAssigning(true);
+    try {
+      await api.assignCourier(order.id, courierId);
+      await load();
+      Alert.alert("Oferta enviada ✅", "O entregador foi notificado e precisa aceitar a entrega.");
+    } catch (e: any) {
+      Alert.alert("Não foi possível atribuir", e?.message || "Tente novamente.");
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -105,24 +121,41 @@ export default function LojistaOrderDetail() {
           <Text style={styles.chatTitle}>Entregador</Text>
           <View style={styles.courierBox}>
             {order.courier ? (
-              <Text style={styles.courierAssigned}>Atribuído: {order.courier.name} • {order.courier.plate} (código #{order.code})</Text>
+              <View style={styles.courierStatusOk}>
+                <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                <Text style={styles.courierAssigned}>Aceito: {order.courier.name} • {order.courier.plate}{order.courier.courier_code ? ` (${order.courier.courier_code})` : ""}</Text>
+              </View>
+            ) : order.courier_offer?.status === "pending" ? (
+              <View style={styles.courierStatusWait}>
+                <Ionicons name="hourglass-outline" size={18} color={colors.warning} />
+                <Text style={styles.courierWait}>Oferta enviada para {order.courier_offer.courier_name} — aguardando aceite</Text>
+              </View>
+            ) : order.courier_refused ? (
+              <View style={styles.courierStatusWait}>
+                <Ionicons name="close-circle" size={18} color={colors.error} />
+                <Text style={styles.courierRefused}>{order.courier_refused.courier_name} recusou — escolha outro entregador</Text>
+              </View>
             ) : (
               <Text style={styles.courierHint}>Escolha um entregador para este pedido:</Text>
             )}
-            {couriers.length === 0 ? (
-              <Text style={styles.courierHint}>Nenhum entregador cadastrado. Cadastre no painel.</Text>
+            {acceptedCouriers.length === 0 ? (
+              <Text style={styles.courierHint}>
+                Nenhum entregador disponível. Convide pelo ID em Painel → Entregadores e aguarde ele aceitar.
+              </Text>
             ) : (
               <View style={styles.courierChips}>
-                {couriers.map((c) => {
-                  const on = order.courier?.id === c.id;
+                {acceptedCouriers.map((c) => {
+                  const on = (order.courier?.id || order.courier_offer?.courier_id) === c.id;
                   return (
                     <Pressable
                       key={c.id}
                       testID={`assign-courier-${c.id}`}
                       style={[styles.courierChip, on && styles.courierChipOn]}
-                      onPress={async () => { await api.assignCourier(order.id, c.id); load(); }}
+                      onPress={() => assign(c.id)}
+                      disabled={assigning}
                     >
                       <Text style={[styles.courierChipText, on && { color: "#fff" }]}>{c.name}</Text>
+                      <Text style={[styles.courierChipCode, on && { color: "#fff" }]}>{c.courier_code}</Text>
                     </Pressable>
                   );
                 })}
@@ -202,12 +235,17 @@ const styles = StyleSheet.create({
   notes: { color: colors.onSurfaceSecondary, marginTop: 2, fontStyle: "italic" },
   chatTitle: { fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg, marginTop: spacing.xl, marginBottom: spacing.sm },
   courierBox: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md },
-  courierAssigned: { color: colors.success, fontWeight: "700" },
+  courierStatusOk: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: spacing.sm },
+  courierStatusWait: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: spacing.sm },
+  courierAssigned: { color: colors.success, fontWeight: "700", flex: 1 },
+  courierWait: { color: colors.warning, fontWeight: "700", flex: 1 },
+  courierRefused: { color: colors.error, fontWeight: "700", flex: 1 },
   courierHint: { color: colors.onSurfaceSecondary, fontSize: font.size.sm },
   courierChips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm },
-  courierChip: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  courierChip: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: "center" },
   courierChipOn: { backgroundColor: colors.brand, borderColor: colors.brand },
-  courierChipText: { color: colors.onSurface, fontWeight: "600" },
+  courierChipText: { color: colors.onSurface, fontWeight: "700" },
+  courierChipCode: { color: colors.onSurfaceSecondary, fontWeight: "600", fontSize: font.size.sm, marginTop: 2 },
   chatBox: { gap: spacing.sm },
   chatEmpty: { color: colors.onSurfaceTertiary },
   bubble: { maxWidth: "80%", padding: spacing.md, borderRadius: radius.md },
