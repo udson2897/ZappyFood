@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 7 (bug fix validation: 'não estou conseguindo vincular o entregador ao pedido' — multi-store courier assignment). VALIDATED END-TO-END. BACKEND (6/6 pass, /app/backend/tests/test_iter7_assign_courier_multistore.py): (1) seeded 'João Entregador' belongs to Burger House (primary store of demo lojista); (2) PATCH /api/orders/{oid}/assign-courier now assigns that courier to an order created on a SECONDARY store (Pizzaria Bella / Açaí Tropical) and returns HTTP 200 with fully populated courier {id,name,cpf,plate}; (3) same courier still assigns to a primary-store order (no regression); (4) unknown courier_id returns 404 'Entregador não encontrado'; (5) unknown order id returns 404; (6) request without Authorization is rejected (401/403). Persistence verified via GET /api/orders/{oid} showing courier + confirming store_id belongs to the secondary store (courier.store_id != order.store_id). FRONTEND (Expo web, 390x844): sign-in-demo-lojista + sign-in-submit → Painel Burger House → /queue shows 8 active cards spanning multiple stores including Pizzaria Bella #J7ZXQ7 (Margherita) and Burger House #4D25ZC (X-Burger Clássico). Opening /(lojista)/order/{J7ZXQ7} (Pizzaria Bella) → 'Escolha um entregador…' → tap assign-courier-94f4ef21-3ea1-48e2-8c87-2e55e72ac575 (João Entregador) → screen updates to 'Atribuído: João Entregador • ABC1D23 (código #J7ZXQ7)' with the chip highlighted (green). Repeating on order #4D25ZC (Burger House) also produced 'Atribuído: João Entregador • ABC1D23 (código #4D25ZC)'. No 404 or error toasts observed. The reported bug is FIXED.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Global (pre-existing, not from iter7)", "issues": ["Warning: 'shadow*' style props deprecated (use boxShadow).", "Warning: props.pointerEvents deprecated (use style.pointerEvents)."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter7_assign_courier_multistore.py",
+    "/app/test_reports/pytest/iter7_results.xml"
+  ],
+  "action_items": [
+    "Optional (UX/multi-store polish): GET /api/my/couriers still returns only couriers of the PRIMARY store (server.py L955-960 uses find_one({owner_id}) → store['id']). For a multi-store lojista this means the entregador chip list on an order detail from a secondary store shows only Burger House couriers. Assignment already works cross-store (fix under test), but the LIST should also be widened using the same $in-on-owner stores pattern used in assign_courier — otherwise, couriers registered under a secondary store would still be invisible when opening any order.",
+    "Optional (UX): show store_name on queue cards is now implemented (visible in screenshots). No action needed."
+  ],
+  "critical_code_review_comments": [
+    "server.py assign_courier (L1045-1062) correctly ownership-checks the order via order.store_id → store.owner_id == user.id, then widens the courier query with store_id: {$in: owned_ids}. Response persists a snapshot of courier {id,name,cpf,plate} on the order — matches what /orders/{id} returns for the frontend chip highlight.",
+    "server.py list_couriers (L955-960) still uses find_one({owner_id}) — same single-store limitation that was fixed for orders/dashboard. Consider aligning with the multi-store aggregation pattern.",
+    "Frontend api.assignCourier / api.couriers (lib/api.ts) unchanged — hits /orders/{id}/assign-courier and /my/couriers. Chip highlight (courierChipOn) works because order response includes courier.id and equality check c.id === order.courier.id passes."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter7_assign_courier_multistore.py",
+    "/app/test_reports/pytest/iter7_results.xml",
+    "/app/test_reports/iteration_7.json"
+  ],
+  "success_rate": {"backend": "100% (6/6 iter7 tests)", "frontend": "100% (login → queue with multi-store orders → detail → tap courier chip → 'Atribuído' state on both a secondary-store order (Pizzaria Bella #J7ZXQ7) and a primary-store order (Burger House #4D25ZC))"},
+  "seed_data_creation": "6 cliente orders created via /api/orders (notes prefixed TEST_iter7_*) on Pizzaria Bella and Burger House to feed the tests. Not cleaned up.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Bug 'não estou conseguindo vincular o entregador ao pedido' is fully resolved for the reported scenario. Reproduce with `EXPO_PUBLIC_BACKEND_URL=... python -m pytest backend/tests/test_iter7_assign_courier_multistore.py`. If revisiting: note that GET /api/my/couriers still lists only primary-store couriers — assignment works but the chip list won't include couriers registered under other owned stores. Consider that a follow-up UX improvement, not a regression of the current fix.",
+  "rca_of_issue": "ROOT CAUSE (previously): PATCH /api/orders/{oid}/assign-courier looked up the courier with {id: courier_id, store_id: order.store_id}. Demo data has the only seeded courier 'João Entregador' registered under Burger House (primary). When the lojista tried to assign it to an order from Pizzaria Bella or Açaí Tropical (secondary stores of the same owner), the query failed to match → HTTP 404 'Entregador não encontrado'. FIX (verified L1045-1062): the endpoint now (a) validates order ownership via order.store_id → store.owner_id == user.id and (b) accepts any courier whose store_id is in the set of stores owned by the same lojista (owned_ids = [s.id for s in db.stores.find({owner_id: user.id})]). Confirmed via 6 pytest cases + live frontend flow returning 'Atribuído: João Entregador • ABC1D23' on both Pizzaria Bella #J7ZXQ7 and Burger House #4D25ZC orders. Ownership check on the ORDER remains intact, so lojistas can only assign to their own orders."
+}

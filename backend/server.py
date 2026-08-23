@@ -954,10 +954,11 @@ async def get_file(path: str):
 
 @api.get("/my/couriers")
 async def list_couriers(user=Depends(require_role("lojista", "admin"))):
-    store = await db.stores.find_one({"owner_id": user["id"]})
-    if not store:
+    stores = await db.stores.find({"owner_id": user["id"]}, {"id": 1, "_id": 0}).to_list(100)
+    ids = [s["id"] for s in stores]
+    if not ids:
         return []
-    return await db.couriers.find({"store_id": store["id"]}, {"_id": 0}).sort("name", 1).to_list(200)
+    return await db.couriers.find({"store_id": {"$in": ids}}, {"_id": 0}).sort("name", 1).to_list(200)
 
 
 async def _ensure_courier_user(name: str, email: str, cpf: str) -> str:
@@ -1048,7 +1049,12 @@ async def assign_courier(oid: str, data: AssignCourierIn, user=Depends(require_r
     store = await db.stores.find_one({"id": order["store_id"]}) if order else None
     if not order or not store or store["owner_id"] != user["id"]:
         raise HTTPException(404, "Pedido não encontrado")
-    courier = await db.couriers.find_one({"id": data.courier_id, "store_id": store["id"]}, {"_id": 0})
+    # entregador pode pertencer a qualquer loja do mesmo dono
+    owned = await db.stores.find({"owner_id": user["id"]}, {"id": 1, "_id": 0}).to_list(100)
+    owned_ids = [s["id"] for s in owned]
+    courier = await db.couriers.find_one(
+        {"id": data.courier_id, "store_id": {"$in": owned_ids}}, {"_id": 0}
+    )
     if not courier:
         raise HTTPException(404, "Entregador não encontrado")
     await db.orders.update_one({"id": oid}, {"$set": {"courier": {
