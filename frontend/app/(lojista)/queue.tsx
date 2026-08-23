@@ -43,10 +43,16 @@ export default function Queue() {
     load();
   };
 
-  const filtered = orders.filter((o) => {
-    if (filter === "ATIVOS") return ["AGUARDANDO_CONFIRMACAO", "ACEITO", "EM_PREPARO", "SAIU_PARA_ENTREGA"].includes(o.status);
-    return o.status === filter;
-  });
+  const filtered = orders
+    .filter((o) => {
+      if (filter === "ATIVOS") return ["AGUARDANDO_CONFIRMACAO", "ACEITO", "EM_PREPARO", "SAIU_PARA_ENTREGA"].includes(o.status);
+      return o.status === filter;
+    })
+    .sort((a, b) => {
+      const ar = a.courier_refused && !a.courier ? 1 : 0;
+      const br = b.courier_refused && !b.courier ? 1 : 0;
+      return br - ar; // recusados primeiro
+    });
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -96,8 +102,10 @@ export default function Queue() {
         ) : (
           filtered.map((o) => {
             const next = NEXT_ACTION[o.status];
+            const refused = o.courier_refused && !o.courier;
+            const active = ["AGUARDANDO_CONFIRMACAO", "ACEITO", "EM_PREPARO", "SAIU_PARA_ENTREGA"].includes(o.status);
             return (
-              <View key={o.id} style={styles.card} testID={`queue-order-${o.id}`}>
+              <View key={o.id} style={[styles.card, refused && active && styles.cardRefused]} testID={`queue-order-${o.id}`}>
                 <Pressable onPress={() => router.push(`/(lojista)/order/${o.id}`)}>
                   <View style={styles.cardTop}>
                     <Text style={styles.customer}>{o.customer_name}{o.code ? ` • #${o.code}` : ""}</Text>
@@ -115,7 +123,28 @@ export default function Queue() {
                     {o.items.map((i: any) => `${i.quantity}x ${i.name}`).join(", ")}
                   </Text>
                   <Text style={styles.total}>{brl(o.total)} • {o.payment_method}</Text>
+                  {active && !refused && o.courier && (
+                    <View style={styles.courierRow}>
+                      <Ionicons name="bicycle" size={14} color={colors.success} />
+                      <Text style={styles.courierOk}>Entregador: {o.courier.name}</Text>
+                    </View>
+                  )}
+                  {active && !refused && !o.courier && o.courier_offer?.status === "pending" && (
+                    <View style={styles.courierRow}>
+                      <Ionicons name="hourglass-outline" size={14} color={colors.warning} />
+                      <Text style={styles.courierWait}>Aguardando {o.courier_offer.courier_name} aceitar…</Text>
+                    </View>
+                  )}
                 </Pressable>
+                {active && refused && (
+                  <View style={styles.refusedBanner} testID={`queue-refused-${o.id}`}>
+                    <Ionicons name="close-circle" size={18} color={colors.error} />
+                    <Text style={styles.refusedText}>{o.courier_refused.courier_name} recusou — atribua a outro</Text>
+                    <Pressable style={styles.reassignBtn} onPress={() => router.push(`/(lojista)/order/${o.id}`)} testID={`queue-reassign-${o.id}`}>
+                      <Text style={styles.reassignText}>Reatribuir</Text>
+                    </Pressable>
+                  </View>
+                )}
                 {next && (
                   <View style={styles.actionsRow}>
                     <Pressable
@@ -166,6 +195,14 @@ const styles = StyleSheet.create({
   pillText: { fontWeight: "700", fontSize: font.size.sm },
   storeRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
   storeName: { color: colors.onSurfaceSecondary, fontSize: font.size.sm, fontWeight: "600" },
+  courierRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
+  courierOk: { color: colors.success, fontSize: font.size.sm, fontWeight: "600" },
+  courierWait: { color: colors.warning, fontSize: font.size.sm, fontWeight: "600" },
+  cardRefused: { borderColor: colors.error, borderWidth: 1.5 },
+  refusedBanner: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.error + "14", borderRadius: radius.md, padding: spacing.sm, marginTop: spacing.sm },
+  refusedText: { flex: 1, color: colors.error, fontWeight: "700", fontSize: font.size.sm },
+  reassignBtn: { backgroundColor: colors.error, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 6 },
+  reassignText: { color: "#fff", fontWeight: "800", fontSize: font.size.sm },
   items: { color: colors.onSurfaceSecondary, marginTop: spacing.xs },
   total: { color: colors.onSurface, fontWeight: "700", marginTop: spacing.xs },
   actionsRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md },

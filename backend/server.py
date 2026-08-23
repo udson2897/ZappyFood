@@ -1125,7 +1125,7 @@ async def assign_courier(oid: str, data: AssignCourierIn, user=Depends(require_r
         "delivery": order.get("address"),
         "assigned_at": now_utc().isoformat(),
     }
-    await db.orders.update_one({"id": oid}, {"$set": {"courier_offer": offer}, "$unset": {"courier": ""}})
+    await db.orders.update_one({"id": oid}, {"$set": {"courier_offer": offer}, "$unset": {"courier": "", "courier_refused": ""}})
     await push_notification(
         courier["id"], "Novo pedido para entrega 🛵",
         f"{order.get('store_name')} • Taxa {brl_py(order.get('delivery_fee', 0))}. Aceite ou recuse.",
@@ -1168,7 +1168,11 @@ async def courier_offer_response(oid: str, data: RespondIn, user=Depends(require
             await push_notification(store["owner_id"], "Entrega aceita ✅",
                                     f"{user['name']} aceitou o pedido #{order.get('code')}.", oid, "courier_accepted")
     else:
-        await db.orders.update_one({"id": oid}, {"$unset": {"courier_offer": "", "courier": ""}})
+        await db.orders.update_one({"id": oid}, {
+            "$set": {"courier_refused": {"courier_id": user["id"], "courier_name": user["name"],
+                                          "at": now_utc().isoformat()}},
+            "$unset": {"courier_offer": "", "courier": ""},
+        })
         if store:
             await push_notification(store["owner_id"], "Entrega recusada ↩️",
                                     f"{user['name']} recusou o pedido #{order.get('code')}. Atribua a outro entregador.",
