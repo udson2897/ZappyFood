@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
+import * as Clipboard from "expo-clipboard";
 import { useAudioPlayer } from "expo-audio";
 import { colors, spacing, radius, font, brl, STATUS_LABELS, STATUS_COLORS } from "@/src/theme";
 import { api } from "@/src/lib/api";
@@ -34,7 +35,7 @@ export default function EntregadorHome() {
   const [gpsInfo, setGpsInfo] = useState("");
   const [balance, setBalance] = useState<any>(null);
   const [balLoading, setBalLoading] = useState(false);
-  const [offers, setOffers] = useState<any[]>([]);
+  const [copied, setCopied] = useState(false);
   const [invites, setInvites] = useState<any[]>([]);
   const [activeOffer, setActiveOffer] = useState<any>(null);
   const seenOffers = useRef<Set<string>>(new Set());
@@ -55,7 +56,6 @@ export default function EntregadorHome() {
       setInvites(invs);
       const newOne = ofs.find((o: any) => !seenOffers.current.has(o.id));
       ofs.forEach((o: any) => seenOffers.current.add(o.id));
-      setOffers(ofs);
       if (newOne) {
         playBeep();
         setActiveOffer((cur: any) => cur || newOne);
@@ -86,6 +86,13 @@ export default function EntregadorHome() {
   const respondInvite = async (link: any, accept: boolean) => {
     try { await api.respondInvite(link.id, accept); } catch {}
     pollOffersInvites();
+  };
+
+  const copyId = async () => {
+    if (!user?.courier_code) return;
+    await Clipboard.setStringAsync(user.courier_code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
   };
 
   const loadOrders = useCallback(async () => {
@@ -211,6 +218,20 @@ export default function EntregadorHome() {
           <Text style={styles.logoutText}>Sair</Text>
         </Pressable>
       </View>
+
+      {user?.courier_code ? (
+        <View style={styles.idCard} testID="courier-id-card">
+          <View style={{ flex: 1 }}>
+            <Text style={styles.idLabel}>Seu ID de entregador</Text>
+            <Text style={styles.idCode} testID="courier-id-value">{user.courier_code}</Text>
+            <Text style={styles.idHint}>Compartilhe com o lojista para receber convites.</Text>
+          </View>
+          <Pressable testID="courier-id-copy" style={[styles.copyBtn, copied && styles.copyBtnDone]} onPress={copyId}>
+            <Ionicons name={copied ? "checkmark" : "copy-outline"} size={18} color="#fff" />
+            <Text style={styles.copyText}>{copied ? "Copiado!" : "Copiar"}</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <View style={styles.tabs}>
         <Pressable testID="tab-entregas" style={[styles.tab, mode === "entregas" && styles.tabOn]} onPress={() => setMode("entregas")}>
@@ -473,6 +494,13 @@ const styles = StyleSheet.create({
   subtitle: { color: colors.onSurfaceSecondary, fontSize: font.size.sm },
   logoutBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.error },
   logoutText: { color: colors.error, fontWeight: "700", fontSize: font.size.sm },
+  idCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.lg, marginTop: spacing.md, backgroundColor: colors.brand, borderRadius: radius.md, padding: spacing.md },
+  idLabel: { color: "rgba(255,255,255,0.85)", fontSize: font.size.sm, fontWeight: "600" },
+  idCode: { color: "#fff", fontSize: font.size.xxl, fontWeight: "800", letterSpacing: 2, marginTop: 2 },
+  idHint: { color: "rgba(255,255,255,0.85)", fontSize: font.size.sm, marginTop: 2 },
+  copyBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.25)", borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  copyBtnDone: { backgroundColor: colors.success },
+  copyText: { color: "#fff", fontWeight: "800", fontSize: font.size.sm },
   tabs: { flexDirection: "row", gap: spacing.sm, margin: spacing.lg, marginBottom: 0, backgroundColor: colors.surfaceSecondary, borderRadius: radius.pill, padding: 4 },
   tab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: spacing.md, borderRadius: radius.pill },
   tabOn: { backgroundColor: colors.brand },

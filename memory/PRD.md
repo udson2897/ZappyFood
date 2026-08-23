@@ -25,6 +25,10 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 23 (2026-08-23) — ID do entregador em destaque + entregador de teste
+- [x] No app do entregador, card em destaque (logo abaixo do cabeçalho) com "Seu ID de entregador" mostrando o `courier_code` em fonte grande e botão **Copiar** (expo-clipboard; muda para "Copiado!"). Facilita compartilhar o ID com o lojista.
+- [x] Criado entregador de teste: nome "Entregador Teste", CPF `00000000000`, senha `00000000000`, placa ABC1234, renavam 00000000000, ID `ZF-546RT`. (E-mail não é usado no modelo do entregador; login é por CPF+senha.)
+
 ### Iter 22 (2026-08-23) — Reatribuir rápido + entregador de teste
 - [x] "Reatribuir" na Fila do lojista agora abre o pedido com `?assign=1` e a tela rola automaticamente até a seção "Entregador", com destaque temporário, para escolher outro entregador de imediato.
 - [x] Criado entregador de teste já vinculado/aceito ao lojista demo: Rafael Teste, CPF `99988877766`, senha `99988877766`, ID `ZF-ZMQBN`.
