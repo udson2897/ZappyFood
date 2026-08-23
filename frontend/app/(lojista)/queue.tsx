@@ -140,7 +140,7 @@ export default function Queue() {
                   <View style={styles.refusedBanner} testID={`queue-refused-${o.id}`}>
                     <Ionicons name="close-circle" size={18} color={colors.error} />
                     <Text style={styles.refusedText}>{o.courier_refused.courier_name} recusou — atribua a outro</Text>
-                    <Pressable style={styles.reassignBtn} onPress={() => router.push(`/(lojista)/order/${o.id}`)} testID={`queue-reassign-${o.id}`}>
+                    <Pressable style={styles.reassignBtn} onPress={() => router.push(`/(lojista)/order/${o.id}?assign=1`)} testID={`queue-reassign-${o.id}`}>
                       <Text style={styles.reassignText}>Reatribuir</Text>
                     </Pressable>
                   </View>

@@ -25,6 +25,11 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 22 (2026-08-23) — Reatribuir rápido + entregador de teste
+- [x] "Reatribuir" na Fila do lojista agora abre o pedido com `?assign=1` e a tela rola automaticamente até a seção "Entregador", com destaque temporário, para escolher outro entregador de imediato.
+- [x] Criado entregador de teste já vinculado/aceito ao lojista demo: Rafael Teste, CPF `99988877766`, senha `99988877766`, ID `ZF-ZMQBN`.
+- [x] Bug crítico corrigido pelo testing_agent: variável `assign` duplicada (param do router + função de atribuição) causava SyntaxError e preview em branco; função interna renomeada para `assignTo`. Verificado (backend 4/4 + E2E frontend, iteration_10).
+
 ### Iter 21 (2026-08-23) — Bug fix: atribuição de entregador (detalhe do pedido)
 - [x] (1) A lista de entregadores no detalhe do pedido agora mostra **nome + ID (courier_code)** e exibe apenas entregadores com vínculo **aceito**. (2) Atribuição corrigida com feedback: ao tocar no entregador, chama `assign-courier` (fluxo de oferta) com tratamento de erro (Alert) e recarrega; estados exibidos: "Oferta enviada para X — aguardando aceite" (pendente), "Aceito: X • placa (ZF-...)" (aceito) e "X recusou — escolha outro" (recusado); chip escolhido destacado. Verificado pelo testing_agent (backend 5/5, frontend ponta a ponta).
 

@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 10 tested the 'Reatribuir Rápido' improvement and Rafael Teste courier. CRITICAL BUG FOUND AND FIXED: /app/frontend/app/(lojista)/order/[id].tsx declared 'const assign' twice in the same scope (line 22 from useLocalSearchParams and line 38 as the assignment function), causing a Babel/Metro SyntaxError ('Identifier assign has already been declared') and returning HTTP 500 on the entire expo-router bundle — the whole web app was broken. Fixed by renaming the function to 'assignTo' and updating its call site (line 169). After the fix: Backend 4/4 tests pass — Rafael courier-login works, appears in /my/couriers with status=accepted, PATCH /orders/{oid}/assign-courier creates courier_offer.status=pending, and refuse sets courier_refused. Frontend: demo lojista login → queue shows 'Rafael Teste recusou — atribua a outro' banner with 'Reatribuir' button, tapping navigates to /(lojista)/order/{id}?assign=1, the ScrollView scrolls the Entregador section into view (Rafael's chip Y=154 inside 667px viewport), the temporary orange border highlight is applied, chips show 'Nome + ZF-CÓDIGO' (Carlos Moto/ZF-LBRXQ, Rafael Teste/ZF-ZMQBN, and other test couriers), and tapping a chip transitions the section text to 'Oferta enviada para X — aguardando aceite' with the chip highlighted in the brand color (verified via screenshot).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter10_reassign.py",
+    "/app/test_reports/pytest/iter10_reassign.xml"
+  ],
+  "action_items": [
+    "Confirm the assign→assignTo rename applied (line 38 declaration and line 169 onPress call). No other files needed edits. Consider adding an ESLint rule (no-shadow / no-redeclare) to catch same-scope const redeclarations before they reach the bundler."
+  ],
+  "critical_code_review_comments": [
+    "CRITICAL (fixed by testing agent): duplicate 'assign' identifier in /app/frontend/app/(lojista)/order/[id].tsx broke the entire web bundle. Root cause: destructuring 'assign' from useLocalSearchParams on the same line as the searchParam name used for the feature, then reusing the same identifier for the assignment async function. Renamed function to 'assignTo'.",
+    "app/(lojista)/order/[id].tsx is 279 lines — still manageable, no split needed yet.",
+    "The order detail screen polls every 4000ms via setInterval → each poll refetches order + chat + couriers. Fine for now, but consider debounce/backoff if the store has many active orders.",
+    "queue.tsx testID for the card is on the outer <View> but the Pressable that navigates is nested — noted in previous iterations, non-blocking."
+  ],
+  "updated_files": [
+    "/app/frontend/app/(lojista)/order/[id].tsx (renamed inner function 'assign' → 'assignTo' at declaration and onPress call to resolve duplicate const declaration syntax error)",
+    "/app/backend/tests/test_iter10_reassign.py (new tests for Rafael + reassign regression)"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "100% for reassign flow"},
+  "seed_data_creation": "Created one TEST order (assigned to Rafael, refused by Rafael) so the 'courier_refused' banner + Reatribuir button appear in the demo lojista queue for the UI test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "After the fix, the web bundle compiles again (HTTP 200 on entry.bundle). To reproduce the refused state for UI, POST /orders as cliente, PATCH /orders/{oid}/assign-courier with Rafael (99988877766 → ZF-ZMQBN), then POST /orders/{oid}/offer-response {accept:false} with Rafael's token. The queue-reassign-<oid> button is inside the refused banner in queue.tsx; tapping it navigates to /(lojista)/order/<id>?assign=1 and the [id] screen reads the 'assign' search param and calls scrollRef.scrollTo({y: courierY.current - 12}) with a 2.5s brand-color border highlight (styles.courierBoxHi). Alert.alert('Oferta enviada ✅') renders inline in RN Web — assert on the visible state text 'Oferta enviada para X — aguardando aceite' rather than dialog events.",
+  "rca_of_issue": "The 'Reatribuir Rápido' change added ?assign=1 support by destructuring 'assign' from useLocalSearchParams (line 22). However the file already had a local function named 'assign' (the courier assignment handler on line 38). Two const declarations of the same identifier in the same block is a SyntaxError in ES modules — Babel reported: 'Identifier assign has already been declared. (38:8)'. Metro returned HTTP 500 for /node_modules/expo-router/entry.bundle → the whole web preview showed a blank page (raw text extraction was empty). Fix: renamed the function to 'assignTo' (line 38 declaration + line 169 onPress). Bundle recovered, feature works end-to-end (verified via UI screenshots and 4/4 backend tests)."
+}

@@ -19,7 +19,7 @@ const NEXT: Record<string, { status: string; label: string } | null> = {
 };
 
 export default function LojistaOrderDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, assign } = useLocalSearchParams<{ id: string; assign?: string }>();
   const { user } = useAuth();
   const router = useRouter();
   const [order, setOrder] = useState<any>(null);
@@ -28,11 +28,14 @@ export default function LojistaOrderDetail() {
   const [text, setText] = useState("");
   const [couriers, setCouriers] = useState<any[]>([]);
   const [assigning, setAssigning] = useState(false);
+  const [highlight, setHighlight] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  const courierY = useRef(0);
+  const didScroll = useRef(false);
 
   const acceptedCouriers = couriers.filter((c) => c.status === "accepted");
 
-  const assign = async (courierId: string) => {
+  const assignTo = async (courierId: string) => {
     setAssigning(true);
     try {
       await api.assignCourier(order.id, courierId);
@@ -61,6 +64,15 @@ export default function LojistaOrderDetail() {
     const t = setInterval(load, 4000);
     return () => clearInterval(t);
   }, [load]);
+
+  useEffect(() => {
+    if (assign === "1" && order && !didScroll.current) {
+      didScroll.current = true;
+      setHighlight(true);
+      setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, courierY.current - 12), animated: true }), 500);
+      setTimeout(() => setHighlight(false), 2500);
+    }
+  }, [assign, order]);
 
   const advance = async () => {
     const n = NEXT[order.status];
@@ -119,7 +131,10 @@ export default function LojistaOrderDetail() {
           </View>
 
           <Text style={styles.chatTitle}>Entregador</Text>
-          <View style={styles.courierBox}>
+          <View
+            style={[styles.courierBox, highlight && styles.courierBoxHi]}
+            onLayout={(e) => { courierY.current = e.nativeEvent.layout.y; }}
+          >
             {order.courier ? (
               <View style={styles.courierStatusOk}>
                 <Ionicons name="checkmark-circle" size={18} color={colors.success} />
@@ -151,7 +166,7 @@ export default function LojistaOrderDetail() {
                       key={c.id}
                       testID={`assign-courier-${c.id}`}
                       style={[styles.courierChip, on && styles.courierChipOn]}
-                      onPress={() => assign(c.id)}
+                      onPress={() => assignTo(c.id)}
                       disabled={assigning}
                     >
                       <Text style={[styles.courierChipText, on && { color: "#fff" }]}>{c.name}</Text>
@@ -235,6 +250,7 @@ const styles = StyleSheet.create({
   notes: { color: colors.onSurfaceSecondary, marginTop: 2, fontStyle: "italic" },
   chatTitle: { fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg, marginTop: spacing.xl, marginBottom: spacing.sm },
   courierBox: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md },
+  courierBoxHi: { borderWidth: 2, borderColor: colors.brand },
   courierStatusOk: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: spacing.sm },
   courierStatusWait: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: spacing.sm },
   courierAssigned: { color: colors.success, fontWeight: "700", flex: 1 },
