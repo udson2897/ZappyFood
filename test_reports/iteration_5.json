@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 5 (bug validation: 'pedidos não aparecem para o lojista') — VALIDATED END-TO-END. BACKEND (4/4 pass): (1) GET /api/my/store/orders with lojista JWT returns a list of orders with all UI-required fields (id, status, items, total, customer_name, payment_method); (2) GET /api/my/store resolves the lojista's active store; (3) Full flow — cliente@ POST /api/orders on Burger House product → new order returned as status AGUARDANDO_CONFIRMACAO and immediately appears in the lojista's /api/my/store/orders queue; (4) PATCH /api/orders/{id}/status ACEITO by lojista persists (verified via GET). ACTIVE count in queue increases as expected. FRONTEND (Expo web, 390x844, all flows PASS): Login sign-in-demo-lojista + sign-in-submit → routes to LOJISTA Painel (Burger House, 2 Pedidos hoje, 2 Ativos agora, 'Fila de pedidos: 2 pedidos aguardando ação'). Clicking 'Pedidos' tab loads /(lojista)/queue with 'Fila de Pedidos' title and all filter chips (queue-filter-ATIVOS/AGUARDANDO_CONFIRMACAO/EM_PREPARO/FINALIZADO). Default 'Ativos' tab shows 2 real cards (queue-order-<id>) with customer name, order code (#OTK3YW / #DISV7P), items summary, R$ value, payment_method and correct advance buttons ('Aceitar pedido' for AGUARDANDO_CONFIRMACAO + reject × button; 'Iniciar preparo' for ACEITO). Clicking 'Finalizado' chip renders 13 finalized order cards. Clicking queue-advance-<id> ('Iniciar preparo') transitioned the order card to 'Em preparo' with next button 'Saiu para entrega' — advance flow works. Empty-state improvement (queue.tsx L83-95) code-reviewed: condition and Portuguese copy ('Nenhum pedido ativo no momento' + 'Você tem X pedido(s) no total. Toque em Finalizado para ver os concluídos.') are correct; not runtime-triggered here because 2 active orders were present. Reported user issue is a UX perception artefact of the default filter, NOT a backend bug — the improved empty-state copy in place correctly steers the lojista to the Finalizado tab.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Global (pre-existing, not iter5 regression)", "issues": ["Warning: 'shadow*' style props deprecated (use boxShadow).", "Warning: props.pointerEvents deprecated (use style.pointerEvents)."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter5_lojista_queue.py",
+    "/app/test_reports/pytest/iter5_results.xml"
+  ],
+  "action_items": [
+    "Nothing blocking for this bug — the queue empty-state UX improvement is correct and orders are correctly returned/rendered. Optional (out of scope): GET /api/my/store/orders reads store via db.stores.find_one({owner_id: user.id}) which returns only ONE store for a lojista that owns multiple (demo lojista owns 3 — Burger House / Pizzaria Bella / Açaí Tropical). Orders placed on Pizzaria Bella or Açaí Tropical will NOT appear in the queue seen by that lojista. Consider aggregating orders across all stores owned by the user, or adding a store selector in the queue screen. This might be why the user perceived 'no orders' if they had also placed orders in a non-primary store."
+  ],
+  "critical_code_review_comments": [
+    "queue.tsx empty-state (L83-95) correctly guards with `filter === 'ATIVOS' && orders.length > 0` and uses proper Portuguese pluralization; testID queue-reload present for retry.",
+    "queue.tsx NEXT_ACTION map correctly encodes the workflow AGUARDANDO_CONFIRMACAO → ACEITO → EM_PREPARO → SAIU_PARA_ENTREGA → FINALIZADO; verified live that pressing 'Iniciar preparo' transitions state and re-renders the card with the next label.",
+    "server.py store_orders (L796-801) filters by store_id derived from the FIRST store owned by the lojista — for multi-store lojistas this hides orders belonging to sibling stores. Not the reported bug but a related risk.",
+    "server.py create_order returns the newly created order verbatim (minus _id) with initial status AGUARDANDO_CONFIRMACAO and pushes notification to store owner — good."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter5_lojista_queue.py",
+    "/app/test_reports/pytest/iter5_results.xml",
+    "/app/test_reports/iteration_5.json"
+  ],
+  "success_rate": {"backend": "100% (4/4 iter5 tests)", "frontend": "100% (login → lojista panel → Pedidos → filters ATIVOS/FINALIZADO → advance order all working)"},
+  "seed_data_creation": "During test_new_customer_order_appears_in_store_queue_as_active a real cliente order was created on Burger House (PIX) with notes='TEST_iter5_queue_flow' and then advanced to ACEITO. Not cleaned up — remains in the DB as a demo order.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The user's complaint 'pedidos não aparecem para o lojista' was UX (default tab 'Ativos' was empty because all existing orders were FINALIZADO). Bug is resolved by the improved empty-state copy in queue.tsx. Multi-store lojistas would still see only the first store's orders in the queue — flag this if it comes up again. To reproduce empty state: log in as lojista, advance every active order to FINALIZADO, then open 'Ativos' tab.",
+  "rca_of_issue": "ROOT CAUSE: /api/my/store/orders returns orders correctly (verified 15 orders for Burger House in seeded DB). The Fila de Pedidos screen defaults to the 'Ativos' filter which only shows AGUARDANDO_CONFIRMACAO/ACEITO/EM_PREPARO/SAIU_PARA_ENTREGA. When ALL existing orders were in FINALIZADO status, the default view rendered an empty list, giving the impression that the queue was broken. NOT A BACKEND OR FETCH BUG. MITIGATION (already applied in queue.tsx L83-95): the empty state now shows total order count + explicit hint to tap 'Finalizado' when filter=='ATIVOS' && orders.length>0 && filtered.length==0. VERIFIED live that when active orders exist they are rendered, and that Finalizado tab lists all 13 finalized orders."
+}

@@ -80,7 +80,18 @@ export default function Queue() {
         ) : filtered.length === 0 ? (
           <View style={styles.empty}>
             <Ionicons name="checkmark-done-circle-outline" size={56} color={colors.onSurfaceTertiary} />
-            <Text style={styles.emptyText}>Nenhum pedido aqui</Text>
+            <Text style={styles.emptyText}>
+              {filter === "ATIVOS" ? "Nenhum pedido ativo no momento" : "Nenhum pedido aqui"}
+            </Text>
+            {filter === "ATIVOS" && orders.length > 0 && (
+              <Text style={styles.emptySub}>
+                Você tem {orders.length} pedido{orders.length !== 1 ? "s" : ""} no total. Toque em Finalizado para ver os concluídos.
+              </Text>
+            )}
+            <Pressable style={styles.reloadBtn} onPress={() => { setLoading(true); load(); }} testID="queue-reload">
+              <Ionicons name="refresh" size={16} color={colors.brand} />
+              <Text style={styles.reloadText}>Atualizar</Text>
+            </Pressable>
           </View>
         ) : (
           filtered.map((o) => {
@@ -94,6 +105,12 @@ export default function Queue() {
                       <Text style={[styles.pillText, { color: STATUS_COLORS[o.status] || colors.info }]}>{STATUS_LABELS[o.status]}</Text>
                     </View>
                   </View>
+                  {o.store_name ? (
+                    <View style={styles.storeRow}>
+                      <Ionicons name="storefront-outline" size={13} color={colors.onSurfaceSecondary} />
+                      <Text style={styles.storeName}>{o.store_name}</Text>
+                    </View>
+                  ) : null}
                   <Text style={styles.items} numberOfLines={2}>
                     {o.items.map((i: any) => `${i.quantity}x ${i.name}`).join(", ")}
                   </Text>
@@ -147,6 +164,8 @@ const styles = StyleSheet.create({
   customer: { fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg, flex: 1 },
   pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill },
   pillText: { fontWeight: "700", fontSize: font.size.sm },
+  storeRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  storeName: { color: colors.onSurfaceSecondary, fontSize: font.size.sm, fontWeight: "600" },
   items: { color: colors.onSurfaceSecondary, marginTop: spacing.xs },
   total: { color: colors.onSurface, fontWeight: "700", marginTop: spacing.xs },
   actionsRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md },
@@ -154,5 +173,8 @@ const styles = StyleSheet.create({
   advanceText: { color: "#fff", fontWeight: "700" },
   rejectBtn: { width: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.error, alignItems: "center", justifyContent: "center" },
   empty: { alignItems: "center", padding: spacing.xxl },
-  emptyText: { color: colors.onSurfaceSecondary, marginTop: spacing.sm, fontSize: font.size.lg },
+  emptyText: { color: colors.onSurfaceSecondary, marginTop: spacing.sm, fontSize: font.size.lg, fontWeight: "700" },
+  emptySub: { color: colors.onSurfaceSecondary, marginTop: spacing.xs, fontSize: font.size.sm, textAlign: "center", paddingHorizontal: spacing.lg },
+  reloadBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.lg, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.brand },
+  reloadText: { color: colors.brand, fontWeight: "700" },
 });

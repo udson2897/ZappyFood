@@ -795,10 +795,11 @@ async def get_order(oid: str, user=Depends(current_user)):
 
 @api.get("/my/store/orders")
 async def store_orders(user=Depends(require_role("lojista", "admin"))):
-    store = await db.stores.find_one({"owner_id": user["id"]})
-    if not store:
+    stores = await db.stores.find({"owner_id": user["id"]}, {"id": 1, "_id": 0}).to_list(100)
+    ids = [s["id"] for s in stores]
+    if not ids:
         return []
-    return await db.orders.find({"store_id": store["id"]}, {"_id": 0}).sort("created_at", -1).to_list(300)
+    return await db.orders.find({"store_id": {"$in": ids}}, {"_id": 0}).sort("created_at", -1).to_list(500)
 
 
 @api.patch("/orders/{oid}/status")
@@ -1372,8 +1373,10 @@ async def dashboard(user=Depends(require_role("lojista", "admin"))):
     store = await db.stores.find_one({"owner_id": user["id"]}, {"_id": 0})
     if not store:
         return {"has_store": False}
+    stores = await db.stores.find({"owner_id": user["id"]}, {"id": 1, "_id": 0}).to_list(100)
+    ids = [s["id"] for s in stores]
     today_iso = now_utc().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-    orders = await db.orders.find({"store_id": store["id"]}, {"_id": 0}).to_list(500)
+    orders = await db.orders.find({"store_id": {"$in": ids}}, {"_id": 0}).to_list(1000)
     today_orders = [o for o in orders if o["created_at"] >= today_iso]
     revenue_today = sum(o["total"] for o in today_orders if o["status"] == "FINALIZADO")
     active_orders = [o for o in orders if o["status"] in ("AGUARDANDO_CONFIRMACAO", "ACEITO", "EM_PREPARO", "SAIU_PARA_ENTREGA")]

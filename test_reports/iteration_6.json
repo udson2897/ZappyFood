@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 6 (bug fix validation: 'pedidos não aparecem para o lojista' – multi-store aggregation). VALIDATED END-TO-END. BACKEND (6/6 pass, /app/backend/tests/test_iter6_multi_store_orders.py): (1) demo lojista owns 3 seeded stores (Burger House, Pizzaria Bella, Açaí Tropical); (2) GET /api/my/store/orders returns orders across ALL stores (no longer only first); (3) cliente POST /api/orders on a SECONDARY store (Pizzaria Bella / Açaí Tropical) immediately appears in the lojista queue as AGUARDANDO_CONFIRMACAO; (4) queue contains >=2 distinct store_ids after the flow; (5) PATCH /api/orders/{id}/status ACEITO works for the secondary-store order and is authorized (owner-check finds the correct store via order.store_id); (6) GET /api/my/dashboard aggregates counts across all stores — orders_today, active_orders and total_finalized match the numbers derived from /my/store/orders. FRONTEND (Expo web, 390x844): sign-in-demo-lojista + sign-in-submit → Painel Burger House (1 Pedidos hoje, 4 Ativos agora, R$30,40 ticket médio). Pedidos tab → Fila de Pedidos with 4 real ACTIVE cards spanning multiple stores: 1x Margherita (Pizzaria Bella), 1x Açaí 500ml (Açaí Tropical), 1x Calabresa (Pizzaria Bella), plus Burger House orders. Direct fetch of /api/my/store/orders from the authenticated page returned {Burger House: 16, Pizzaria Bella: 4, Açaí Tropical: 1} → confirms aggregation from the frontend perspective. 'Aceitar pedido' / 'Iniciar preparo' / 'Saiu para entrega' (queue-advance-<id>) buttons render correctly. Finalizado filter shows 15 cards. The reported bug is FIXED.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "queue.tsx", "issues": ["Order cards do not display the store name (customer_name + code + items only). With multi-store aggregation active, the lojista cannot tell at a glance which store an order belongs to. Suggestion: append o.store_name to the card header (already available in the payload)."]},
+      {"screen": "Global (pre-existing, not from iter6)", "issues": ["Warning: 'shadow*' style props deprecated (use boxShadow).", "Warning: props.pointerEvents deprecated (use style.pointerEvents)."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter6_multi_store_orders.py",
+    "/app/test_reports/pytest/iter6_results.xml"
+  ],
+  "action_items": [
+    "Optional (UX): show o.store_name on each card in /app/frontend/app/(lojista)/queue.tsx (line 103) so the lojista sees which of the 3 stores each order belongs to. Not blocking — bug is fixed.",
+    "Optional: consider adding a store filter chip in the Fila (all / Burger House / Pizzaria Bella / Açaí Tropical) for lojistas with multiple stores."
+  ],
+  "critical_code_review_comments": [
+    "server.py store_orders (L796-802) now correctly aggregates: `stores = db.stores.find({owner_id})` then `orders.find({store_id: {$in: ids}})` — matches the fix requested and is verified end-to-end.",
+    "server.py dashboard (L1370-1393) uses the same $in-based aggregation and returns has_store=True when the lojista has at least one store; today/active/finalized counts are now correct across all owned stores.",
+    "server.py update_order_status (L805-824) resolves the store from order.store_id (not from user.id), so PATCHing an order in a secondary store correctly identifies is_owner via store.owner_id — no auth regression for multi-store lojistas.",
+    "Frontend api.storeOrders() correctly consumes /my/store/orders and queue.tsx renders all returned orders — no client-side filtering by store_id."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter6_multi_store_orders.py",
+    "/app/test_reports/pytest/iter6_results.xml",
+    "/app/test_reports/iteration_6.json"
+  ],
+  "success_rate": {"backend": "100% (6/6 iter6 tests)", "frontend": "100% (login → Painel → Pedidos → Ativos tab shows 4 cards from multiple stores; Finalizado tab shows 15; direct API fetch confirms orders across 3 stores)"},
+  "seed_data_creation": "test_new_secondary_order created 1 cliente order on a secondary store (Pizzaria Bella or Açaí Tropical, PIX) with notes='TEST_iter6_secondary_store' and advanced it to ACEITO. Not cleaned up.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Bug 'pedidos não aparecem para o lojista' is fully resolved by the multi-store aggregation. If revisiting: reproduce with `python -m pytest backend/tests/test_iter6_multi_store_orders.py` (requires exporting EXPO_PUBLIC_BACKEND_URL from frontend/.env). Only UX polish remains: showing store_name in queue cards.",
+  "rca_of_issue": "ROOT CAUSE (previously): GET /api/my/store/orders and /api/my/dashboard used db.stores.find_one({owner_id: user.id}) → for a lojista owning multiple stores (demo lojista owns 3), only the first store's orders were fetched. Any cliente order created on Pizzaria Bella or Açaí Tropical was silently invisible in the queue. FIX (verified): both endpoints now list all stores of the owner (`ids = [s.id for s in stores]`) and filter orders with `store_id: {$in: ids}`. Confirmed via 6 pytest cases + live frontend fetch returning orders from Burger House(16) + Pizzaria Bella(4) + Açaí Tropical(1) = 21 total, with active cards visible in the Fila for Margherita/Calabresa/Açaí 500ml alongside Burger orders. PATCH status still correctly authorizes owner via order.store_id lookup, so accepting/advancing orders on secondary stores works without regression."
+}

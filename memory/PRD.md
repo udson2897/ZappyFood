@@ -25,6 +25,9 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 17 (2026-08-19) — Bug fix
+- [x] Corrigido: pedidos não apareciam para o lojista. Causa: o lojista demo possui 3 lojas, mas `GET /api/my/store/orders` e `/api/my/dashboard` usavam `find_one({owner_id})`, retornando pedidos de apenas 1 loja; pedidos das outras lojas ficavam invisíveis. Correção: ambos agregam por todas as lojas do dono (`store_id $in ids`). Melhorias UX: nome da loja em cada card da fila e estado vazio mais claro (indica total e aba Finalizado). Verificado pelo testing_agent (backend 6/6, frontend OK).
+
 ### Iter 16 (2026-08-18) — Bug fix
 - [x] Corrigido: botões demo de login abriam o acesso trocado (cliente abria lojista e vice-versa). Causa: `role`/`active_role` das contas demo foram corrompidos pelo switch-role em testes. Correções: (1) reparo idempotente das contas demo em `seed_data` a cada startup (cliente→cliente, lojista→lojista); (2) `switch-role` agora ignora as contas demo (`DEMO_EMAILS`), mantendo papel fixo para não recorrer. Verificado pelo testing_agent (backend 3/3, frontend 3/3).
 
