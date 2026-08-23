@@ -25,6 +25,14 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 19 (2026-08-23) — Reformulação dos entregadores
+- [x] Entregador agora se **auto-cadastra** na tela de login (aba Entregador → Cadastrar): nome, CPF, placa, renavam. Senha = CPF. Sistema gera **ID único ZF-XXXXX**. Login por CPF+senha (`POST /api/courier/register`, `POST /api/auth/courier-login`).
+- [x] Removido o cadastro de entregadores do menu do lojista; agora o lojista **convida por ID** (`POST /api/my/couriers/invite`). O entregador **aceita/recusa o convite** (`/courier/me/invites` + respond). Vínculo por dono (owner_id) — entregador pode atender várias lojas.
+- [x] Atribuição vira **oferta**: `assign-courier` cria `courier_offer` pendente (não seta courier). Entregador recebe **notificação in-app com som** (polling 8s + expo-audio `assets/sounds/beep.wav`) com nome da loja, endereço de coleta e de entrega, e **aceita/recusa** (`/courier/me/offers`, `/orders/{id}/offer-response`). Recusar devolve ao lojista.
+- [x] Iniciar rota deixa **escolher Google Maps ou Waze**.
+- [x] Saldo do entregador por **dia/semana/mês com quebra por loja** (nome, qtd e total por loja no período). `_earnings` agrupa por `store_name`.
+- [x] Dados antigos de entregadores limpos (começar do zero). Verificado pelo testing_agent (backend 16/16, frontend fluxo completo). Obs: warnings de shadow*/pointerEvents são pré-existentes e não bloqueiam.
+
 ### Iter 18 (2026-08-19) — Bug fix
 - [x] Corrigido: não era possível vincular entregador ao pedido. Causa: `PATCH /api/orders/{oid}/assign-courier` exigia que o entregador pertencesse à mesma loja do pedido; com múltiplas lojas do mesmo dono, atribuir a pedido de outra loja retornava 404. Correção: valida o entregador por qualquer loja do dono (`store_id $in owned_ids`); `/my/couriers` também alargado para todas as lojas do dono. Verificado pelo testing_agent (backend 6/6, frontend OK, incluindo loja secundária).
 

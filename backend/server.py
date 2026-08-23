@@ -199,12 +199,15 @@ class LoginIn(BaseModel):
 class UserOut(BaseModel):
     id: str
     name: str
-    email: EmailStr
+    email: Optional[str] = None
     phone: Optional[str] = None
     role: Role
     active_role: Role
     loyalty_points: int = 0
     cpf: Optional[str] = None
+    courier_code: Optional[str] = None
+    plate: Optional[str] = None
+    renavam: Optional[str] = None
 
 
 class TokenOut(BaseModel):
@@ -326,12 +329,18 @@ class RatingIn(BaseModel):
 
 # ============== Auth Routes ==============
 def to_user_out(user: dict) -> UserOut:
+    email = user.get("email")
+    if email and email.endswith("@zappyfood.local"):
+        email = None  # e-mail sintético do entregador não é exposto
     return UserOut(
-        id=user["id"], name=user["name"], email=user["email"],
+        id=user["id"], name=user["name"], email=email,
         phone=user.get("phone", ""), role=user["role"],
         active_role=user.get("active_role", user["role"]),
         loyalty_points=user.get("loyalty_points", 0),
         cpf=user.get("cpf"),
+        courier_code=user.get("courier_code"),
+        plate=user.get("plate"),
+        renavam=user.get("renavam"),
     )
 
 
@@ -849,13 +858,6 @@ async def read_one(nid: str, user=Depends(current_user)):
     return {"ok": True}
 
 
-class CourierIn(BaseModel):
-    name: str
-    cpf: str
-    plate: str
-    email: EmailStr
-
-
 def only_digits(s: str) -> str:
     return "".join(ch for ch in (s or "") if ch.isdigit())
 
@@ -952,90 +954,148 @@ async def get_file(path: str):
                     headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
+class CourierRegisterIn(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    cpf: str
+    plate: str
+    renavam: str
+
+
+class CourierLoginIn(BaseModel):
+    cpf: str
+    password: str
+
+
+def _gen_courier_code() -> str:
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # sem chars ambíguos
+    return "ZF-" + "".join(random.choices(alphabet, k=5))
+
+
+@api.post("/courier/register", response_model=TokenOut, status_code=201)
+async def courier_register(data: CourierRegisterIn):
+    cpf = only_digits(data.cpf)
+    if len(cpf) < 11:
+        raise HTTPException(400, "CPF inválido (11 dígitos)")
+    if await db.users.find_one({"role": "entregador", "cpf": cpf}):
+        raise HTTPException(409, "Já existe um entregador com este CPF. Faça login.")
+    code = None
+    for _ in range(12):
+        c = _gen_courier_code()
+        if not await db.users.find_one({"courier_code": c}):
+            code = c
+            break
+    if not code:
+        raise HTTPException(500, "Não foi possível gerar o ID. Tente novamente.")
+    uid = str(uuid.uuid4())
+    user = {
+        "id": uid, "name": data.name.strip(), "email": f"courier.{cpf}@zappyfood.local", "phone": "",
+        "password_hash": hash_password(cpf), "role": "entregador", "active_role": "entregador",
+        "cpf": cpf, "plate": data.plate.upper().strip(), "renavam": only_digits(data.renavam),
+        "courier_code": code, "loyalty_points": 0, "created_at": now_utc().isoformat(),
+    }
+    await db.users.insert_one(user)
+    return TokenOut(
+        access_token=make_token(uid, "entregador", "access", timedelta(minutes=ACCESS_MIN)),
+        refresh_token=make_token(uid, "entregador", "refresh", timedelta(days=REFRESH_DAYS)),
+        user=to_user_out(user),
+    )
+
+
+@api.post("/auth/courier-login", response_model=TokenOut)
+async def courier_login(data: CourierLoginIn):
+    cpf = only_digits(data.cpf)
+    user = await db.users.find_one({"role": "entregador", "cpf": cpf})
+    if not user or not verify_password(data.password, user["password_hash"]):
+        raise HTTPException(401, "CPF ou senha inválidos")
+    return TokenOut(
+        access_token=make_token(user["id"], "entregador", "access", timedelta(minutes=ACCESS_MIN)),
+        refresh_token=make_token(user["id"], "entregador", "refresh", timedelta(days=REFRESH_DAYS)),
+        user=to_user_out(user),
+    )
+
+
+# ============== Vínculo loja <-> entregador (convite) ==============
+class InviteCourierIn(BaseModel):
+    courier_code: str
+
+
+class RespondIn(BaseModel):
+    accept: bool
+
+
+async def _owner_display_name(user: dict) -> str:
+    store = await db.stores.find_one({"owner_id": user["id"]}, {"_id": 0, "fantasy_name": 1})
+    return store["fantasy_name"] if store else user.get("name", "Loja")
+
+
 @api.get("/my/couriers")
 async def list_couriers(user=Depends(require_role("lojista", "admin"))):
-    stores = await db.stores.find({"owner_id": user["id"]}, {"id": 1, "_id": 0}).to_list(100)
-    ids = [s["id"] for s in stores]
-    if not ids:
-        return []
-    return await db.couriers.find({"store_id": {"$in": ids}}, {"_id": 0}).sort("name", 1).to_list(200)
+    """Entregadores que aceitaram o convite deste lojista."""
+    links = await db.store_couriers.find({"owner_id": user["id"]}, {"_id": 0}).to_list(200)
+    out = []
+    for lk in links:
+        cu = await db.users.find_one({"id": lk["courier_id"]}, {"_id": 0})
+        if not cu:
+            continue
+        out.append({
+            "id": cu["id"], "name": cu["name"], "courier_code": cu.get("courier_code"),
+            "plate": cu.get("plate"), "cpf": cu.get("cpf"), "status": lk["status"],
+        })
+    out.sort(key=lambda c: (c["status"] != "accepted", (c["name"] or "").lower()))
+    return out
 
 
-async def _ensure_courier_user(name: str, email: str, cpf: str) -> str:
-    """Cria ou atualiza a conta de login (role entregador) do entregador.
-    Senha = CPF. Retorna o user_id."""
-    existing = await db.users.find_one({"email": email})
-    if existing and existing.get("role") != "entregador":
-        raise HTTPException(409, "E-mail já usado por outro tipo de conta")
-    if existing:
-        await db.users.update_one({"id": existing["id"]}, {"$set": {
-            "name": name, "cpf": cpf, "password_hash": hash_password(cpf), "active_role": "entregador",
-        }})
-        return existing["id"]
-    uid = str(uuid.uuid4())
-    await db.users.insert_one({
-        "id": uid, "name": name, "email": email, "phone": "",
-        "password_hash": hash_password(cpf), "role": "entregador", "active_role": "entregador",
-        "cpf": cpf, "loyalty_points": 0, "created_at": now_utc().isoformat(),
-    })
-    return uid
-
-
-@api.post("/my/couriers")
-async def create_courier(data: CourierIn, user=Depends(require_role("lojista", "admin"))):
-    store = await db.stores.find_one({"owner_id": user["id"]})
-    if not store:
+@api.post("/my/couriers/invite")
+async def invite_courier(data: InviteCourierIn, user=Depends(require_role("lojista", "admin"))):
+    if not await db.stores.find_one({"owner_id": user["id"]}):
         raise HTTPException(400, "Crie uma loja primeiro")
-    cpf = only_digits(data.cpf)
-    if len(cpf) < 11:
-        raise HTTPException(400, "CPF inválido")
-    email = data.email.lower()
-    uid = await _ensure_courier_user(data.name, email, cpf)
-    doc = {
-        "id": str(uuid.uuid4()), "store_id": store["id"],
-        "name": data.name, "cpf": cpf, "plate": data.plate.upper(),
-        "email": email, "user_id": uid,
+    code = data.courier_code.strip().upper()
+    if not code.startswith("ZF-"):
+        code = "ZF-" + code.replace("ZF-", "")
+    courier = await db.users.find_one({"role": "entregador", "courier_code": code}, {"_id": 0})
+    if not courier:
+        raise HTTPException(404, "ID de entregador não encontrado")
+    existing = await db.store_couriers.find_one({"owner_id": user["id"], "courier_id": courier["id"]})
+    if existing:
+        if existing["status"] == "accepted":
+            raise HTTPException(409, "Este entregador já está vinculado à sua loja")
+        raise HTTPException(409, "Convite já enviado, aguardando o entregador aceitar")
+    link = {
+        "id": str(uuid.uuid4()), "owner_id": user["id"], "courier_id": courier["id"],
+        "courier_code": code, "status": "pending",
+        "store_name": await _owner_display_name(user),
         "created_at": now_utc().isoformat(),
     }
-    await db.couriers.insert_one(doc)
-    return {k: v for k, v in doc.items() if k != "_id"}
-
-
-@api.patch("/my/couriers/{cid}")
-async def update_courier(cid: str, data: CourierIn, user=Depends(require_role("lojista", "admin"))):
-    store = await db.stores.find_one({"owner_id": user["id"]})
-    if not store:
-        raise HTTPException(404, "Sem loja")
-    courier = await db.couriers.find_one({"id": cid, "store_id": store["id"]})
-    if not courier:
-        raise HTTPException(404, "Entregador não encontrado")
-    cpf = only_digits(data.cpf)
-    if len(cpf) < 11:
-        raise HTTPException(400, "CPF inválido")
-    email = data.email.lower()
-    uid = courier.get("user_id")
-    if uid:
-        other = await db.users.find_one({"email": email})
-        if other and other["id"] != uid:
-            raise HTTPException(409, "E-mail já usado por outra conta")
-        await db.users.update_one({"id": uid}, {"$set": {
-            "name": data.name, "cpf": cpf, "email": email, "password_hash": hash_password(cpf),
-        }})
-    else:
-        uid = await _ensure_courier_user(data.name, email, cpf)
-    await db.couriers.update_one(
-        {"id": cid, "store_id": store["id"]},
-        {"$set": {"name": data.name, "cpf": cpf, "plate": data.plate.upper(), "email": email, "user_id": uid}},
+    await db.store_couriers.insert_one(link)
+    await push_notification(
+        courier["id"], "Novo convite 🎯",
+        f"{link['store_name']} convidou você para entregas.", None, "courier_invite",
     )
-    return await db.couriers.find_one({"id": cid}, {"_id": 0})
+    return {"ok": True, "courier": {"name": courier["name"], "courier_code": code}}
 
 
-@api.delete("/my/couriers/{cid}")
-async def delete_courier(cid: str, user=Depends(require_role("lojista", "admin"))):
-    store = await db.stores.find_one({"owner_id": user["id"]})
-    if not store:
-        raise HTTPException(404, "Sem loja")
-    await db.couriers.delete_one({"id": cid, "store_id": store["id"]})
+@api.delete("/my/couriers/{courier_id}")
+async def remove_courier_link(courier_id: str, user=Depends(require_role("lojista", "admin"))):
+    await db.store_couriers.delete_one({"owner_id": user["id"], "courier_id": courier_id})
+    return {"ok": True}
+
+
+@api.get("/courier/me/invites")
+async def courier_invites(user=Depends(require_role("entregador"))):
+    return await db.store_couriers.find(
+        {"courier_id": user["id"], "status": "pending"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+
+
+@api.post("/courier/me/invites/{link_id}/respond")
+async def courier_respond_invite(link_id: str, data: RespondIn, user=Depends(require_role("entregador"))):
+    link = await db.store_couriers.find_one({"id": link_id, "courier_id": user["id"]})
+    if not link:
+        raise HTTPException(404, "Convite não encontrado")
+    if data.accept:
+        await db.store_couriers.update_one({"id": link_id}, {"$set": {"status": "accepted"}})
+    else:
+        await db.store_couriers.delete_one({"id": link_id})
     return {"ok": True}
 
 
@@ -1049,18 +1109,71 @@ async def assign_courier(oid: str, data: AssignCourierIn, user=Depends(require_r
     store = await db.stores.find_one({"id": order["store_id"]}) if order else None
     if not order or not store or store["owner_id"] != user["id"]:
         raise HTTPException(404, "Pedido não encontrado")
-    # entregador pode pertencer a qualquer loja do mesmo dono
-    owned = await db.stores.find({"owner_id": user["id"]}, {"id": 1, "_id": 0}).to_list(100)
-    owned_ids = [s["id"] for s in owned]
-    courier = await db.couriers.find_one(
-        {"id": data.courier_id, "store_id": {"$in": owned_ids}}, {"_id": 0}
+    link = await db.store_couriers.find_one(
+        {"owner_id": user["id"], "courier_id": data.courier_id, "status": "accepted"}
     )
+    if not link:
+        raise HTTPException(404, "Entregador não vinculado. Convide-o pelo ID e aguarde o aceite.")
+    courier = await db.users.find_one({"id": data.courier_id, "role": "entregador"}, {"_id": 0})
     if not courier:
         raise HTTPException(404, "Entregador não encontrado")
-    await db.orders.update_one({"id": oid}, {"$set": {"courier": {
-        "id": courier["id"], "name": courier["name"], "cpf": courier["cpf"], "plate": courier["plate"],
-    }}})
+    offer = {
+        "courier_id": courier["id"], "courier_name": courier["name"],
+        "status": "pending", "store_name": order.get("store_name"),
+        "pickup": {"name": store["fantasy_name"], "address": store.get("address"),
+                   "lat": store.get("lat"), "lng": store.get("lng")},
+        "delivery": order.get("address"),
+        "assigned_at": now_utc().isoformat(),
+    }
+    await db.orders.update_one({"id": oid}, {"$set": {"courier_offer": offer}, "$unset": {"courier": ""}})
+    await push_notification(
+        courier["id"], "Novo pedido para entrega 🛵",
+        f"{order.get('store_name')} • Taxa {brl_py(order.get('delivery_fee', 0))}. Aceite ou recuse.",
+        oid, "courier_offer",
+    )
     return await db.orders.find_one({"id": oid}, {"_id": 0})
+
+
+@api.get("/courier/me/offers")
+async def courier_offers(user=Depends(require_role("entregador"))):
+    orders = await db.orders.find(
+        {"courier_offer.courier_id": user["id"], "courier_offer.status": "pending"}, {"_id": 0}
+    ).sort("courier_offer.assigned_at", -1).to_list(100)
+    return [{
+        "id": o["id"], "code": o.get("code"),
+        "store_name": o["courier_offer"].get("store_name"),
+        "pickup": o["courier_offer"].get("pickup"),
+        "delivery": o["courier_offer"].get("delivery"),
+        "delivery_fee": o.get("delivery_fee"), "total": o.get("total"),
+        "customer_name": o.get("customer_name"), "payment_method": o.get("payment_method"),
+    } for o in orders]
+
+
+@api.post("/orders/{oid}/offer-response")
+async def courier_offer_response(oid: str, data: RespondIn, user=Depends(require_role("entregador"))):
+    order = await db.orders.find_one({"id": oid})
+    if not order:
+        raise HTTPException(404, "Pedido não encontrado")
+    offer = order.get("courier_offer")
+    if not offer or offer.get("courier_id") != user["id"] or offer.get("status") != "pending":
+        raise HTTPException(400, "Oferta não disponível")
+    store = await db.stores.find_one({"id": order["store_id"]})
+    if data.accept:
+        await db.orders.update_one({"id": oid}, {"$set": {
+            "courier_offer.status": "accepted",
+            "courier": {"id": user["id"], "name": user["name"], "cpf": user.get("cpf"),
+                        "plate": user.get("plate"), "courier_code": user.get("courier_code")},
+        }})
+        if store:
+            await push_notification(store["owner_id"], "Entrega aceita ✅",
+                                    f"{user['name']} aceitou o pedido #{order.get('code')}.", oid, "courier_accepted")
+    else:
+        await db.orders.update_one({"id": oid}, {"$unset": {"courier_offer": "", "courier": ""}})
+        if store:
+            await push_notification(store["owner_id"], "Entrega recusada ↩️",
+                                    f"{user['name']} recusou o pedido #{order.get('code')}. Atribua a outro entregador.",
+                                    oid, "courier_refused")
+    return {"ok": True}
 
 
 def _finalized_at(o: dict) -> Optional[str]:
@@ -1075,8 +1188,9 @@ async def couriers_report(date: Optional[str] = None, user=Depends(require_role(
     """Relatório diário de entregas finalizadas por entregador.
     A taxa de entrega de cada pedido é o valor a pagar ao entregador.
     `date` no formato YYYY-MM-DD (padrão: hoje, fuso America/Sao_Paulo)."""
-    store = await db.stores.find_one({"owner_id": user["id"]})
-    if not store:
+    stores = await db.stores.find({"owner_id": user["id"]}, {"id": 1, "_id": 0}).to_list(100)
+    store_ids = [s["id"] for s in stores]
+    if not store_ids:
         return {"date": datetime.now(BR_TZ).date().isoformat(), "couriers": [],
                 "unassigned": {"deliveries": 0, "total_fee": 0.0, "orders": []},
                 "totals": {"deliveries": 0, "to_pay": 0.0}}
@@ -1089,7 +1203,7 @@ async def couriers_report(date: Optional[str] = None, user=Depends(require_role(
     end_utc = (start_local + timedelta(days=1)).astimezone(timezone.utc)
 
     orders = await db.orders.find(
-        {"store_id": store["id"], "status": "FINALIZADO"}, {"_id": 0}
+        {"store_id": {"$in": store_ids}, "status": "FINALIZADO"}, {"_id": 0}
     ).to_list(2000)
 
     groups: dict = {}
@@ -1150,26 +1264,34 @@ async def courier_earnings(cpf: str):
     digits = only_digits(cpf)
     if len(digits) < 11:
         raise HTTPException(400, "CPF inválido")
-    courier = await db.couriers.find_one({"cpf": digits}, {"_id": 0})
+    courier = await db.users.find_one({"role": "entregador", "cpf": digits}, {"_id": 0})
     if not courier:
-        raise HTTPException(404, "CPF não encontrado. Confirme com a loja se você foi cadastrado.")
-    return await _earnings_for_cpf(digits, courier.get("name"))
+        raise HTTPException(404, "CPF não encontrado.")
+    return await _earnings({"status": "FINALIZADO", "courier.cpf": digits}, courier.get("name"))
 
 
-async def _earnings_for_cpf(digits: str, name: Optional[str]) -> dict:
-    """Soma as taxas de entrega dos pedidos finalizados atribuídos ao entregador,
-    agrupadas por dia, semana (a partir de segunda) e mês corrente (fuso America/Sao_Paulo)."""
+async def _earnings(match: dict, name: Optional[str]) -> dict:
+    """Ganhos (soma das taxas de entrega) de pedidos finalizados, por dia/semana/mês,
+    com quebra por loja. Fuso America/Sao_Paulo."""
     now_br = datetime.now(BR_TZ)
     day_start = now_br.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = day_start - timedelta(days=day_start.weekday())
     month_start = day_start.replace(day=1)
-    orders = await db.orders.find(
-        {"status": "FINALIZADO", "courier.cpf": digits}, {"_id": 0}
-    ).to_list(5000)
-    day = {"count": 0, "total": 0.0}
-    week = {"count": 0, "total": 0.0}
-    month = {"count": 0, "total": 0.0}
+    orders = await db.orders.find(match, {"_id": 0}).to_list(5000)
+
+    def new_bucket():
+        return {"count": 0, "total": 0.0, "_stores": {}}
+
+    day, week, month = new_bucket(), new_bucket(), new_bucket()
     day_orders = []
+
+    def add(bucket, store_name, fee):
+        bucket["count"] += 1
+        bucket["total"] += fee
+        s = bucket["_stores"].setdefault(store_name or "Loja", {"store_name": store_name or "Loja", "count": 0, "total": 0.0})
+        s["count"] += 1
+        s["total"] += fee
+
     for o in orders:
         fa = _finalized_at(o)
         try:
@@ -1180,29 +1302,30 @@ async def _earnings_for_cpf(digits: str, name: Optional[str]) -> dict:
         except Exception:
             continue
         fee = round(float(o.get("delivery_fee", 0) or 0), 2)
+        sn = o.get("store_name")
         if dt_br >= month_start:
-            month["count"] += 1
-            month["total"] += fee
+            add(month, sn, fee)
         if dt_br >= week_start:
-            week["count"] += 1
-            week["total"] += fee
+            add(week, sn, fee)
         if dt_br >= day_start:
-            day["count"] += 1
-            day["total"] += fee
+            add(day, sn, fee)
             day_orders.append({
                 "id": o["id"], "code": o.get("code"), "delivery_fee": fee,
                 "total": o.get("total"), "customer_name": o.get("customer_name"),
-                "store_name": o.get("store_name"),
-                "at": dt_br.strftime("%H:%M"),
-                "_ts": dt_br.timestamp(),
+                "store_name": sn, "at": dt_br.strftime("%H:%M"), "_ts": dt_br.timestamp(),
             })
-    for b in (day, week, month):
-        b["total"] = round(b["total"], 2)
+
+    def finalize(b):
+        stores = sorted(b["_stores"].values(), key=lambda s: (-s["total"], s["store_name"]))
+        for s in stores:
+            s["total"] = round(s["total"], 2)
+        return {"count": b["count"], "total": round(b["total"], 2), "stores": stores}
+
     day_orders.sort(key=lambda x: x["_ts"], reverse=True)
     for d in day_orders:
         d.pop("_ts", None)
-    return {"name": name, "cpf": digits, "day": day,
-            "week": week, "month": month, "day_orders": day_orders}
+    return {"name": name, "day": finalize(day), "week": finalize(week),
+            "month": finalize(month), "day_orders": day_orders}
 
 
 def _courier_order_payload(order: dict, store: dict) -> dict:
@@ -1220,8 +1343,7 @@ def _courier_order_payload(order: dict, store: dict) -> dict:
 # ============== Entregador (autenticado) ==============
 @api.get("/courier/me/orders")
 async def courier_my_orders(user=Depends(require_role("entregador"))):
-    cpf = only_digits(user.get("cpf"))
-    orders = await db.orders.find({"courier.cpf": cpf}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    orders = await db.orders.find({"courier.id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return [{
         "id": o["id"], "code": o.get("code"), "status": o["status"],
         "customer_name": o.get("customer_name"), "address": o.get("address"),
@@ -1232,12 +1354,11 @@ async def courier_my_orders(user=Depends(require_role("entregador"))):
 
 @api.get("/courier/me/order/{code}")
 async def courier_my_order(code: str, user=Depends(require_role("entregador"))):
-    cpf = only_digits(user.get("cpf"))
     order = await db.orders.find_one({"code": code.upper()}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Pedido não encontrado")
     c = order.get("courier")
-    if not c or only_digits(c.get("cpf")) != cpf:
+    if not c or c.get("id") != user["id"]:
         raise HTTPException(403, "Este pedido não está atribuído a você")
     store = await db.stores.find_one({"id": order["store_id"]}, {"_id": 0})
     return _courier_order_payload(order, store)
@@ -1245,7 +1366,7 @@ async def courier_my_order(code: str, user=Depends(require_role("entregador"))):
 
 @api.get("/courier/me/earnings")
 async def courier_my_earnings(user=Depends(require_role("entregador"))):
-    return await _earnings_for_cpf(only_digits(user.get("cpf")), user.get("name"))
+    return await _earnings({"status": "FINALIZADO", "courier.id": user["id"]}, user.get("name"))
 
 
 @api.post("/courier/validate")

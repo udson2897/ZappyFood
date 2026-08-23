@@ -162,11 +162,35 @@ export const api = {
   deleteCourier: (id: string) => apiFetch<any>(`/my/couriers/${id}`, { method: 'DELETE' }),
   assignCourier: (oid: string, courier_id: string) => apiFetch<any>(`/orders/${oid}/assign-courier`, { method: 'PATCH', body: JSON.stringify({ courier_id }) }),
   courierReport: (date?: string) => apiFetch<any>(`/my/couriers/report${date ? `?date=${date}` : ''}`),
+  inviteCourier: (courier_code: string) => apiFetch<any>('/my/couriers/invite', { method: 'POST', body: JSON.stringify({ courier_code }) }),
+  removeCourierLink: (courier_id: string) => apiFetch<any>(`/my/couriers/${courier_id}`, { method: 'DELETE' }),
   // entregador (autenticado)
   courierMyOrders: () => apiFetch<any[]>('/courier/me/orders'),
   courierMyOrder: (code: string) => apiFetch<any>(`/courier/me/order/${code}`),
   courierMyEarnings: () => apiFetch<any>('/courier/me/earnings'),
+  courierInvites: () => apiFetch<any[]>('/courier/me/invites'),
+  respondInvite: (link_id: string, accept: boolean) => apiFetch<any>(`/courier/me/invites/${link_id}/respond`, { method: 'POST', body: JSON.stringify({ accept }) }),
+  courierOffers: () => apiFetch<any[]>('/courier/me/offers'),
+  respondOffer: (oid: string, accept: boolean) => apiFetch<any>(`/orders/${oid}/offer-response`, { method: 'POST', body: JSON.stringify({ accept }) }),
 };
+
+export async function courierRegister(payload: { name: string; cpf: string; plate: string; renavam: string }) {
+  const res = await fetch(`${API}/courier/register`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.detail || 'Falha no cadastro');
+  return data as { access_token: string; refresh_token: string; user: User };
+}
+
+export async function courierLoginApi(cpf: string, password: string) {
+  const res = await fetch(`${API}/auth/courier-login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cpf, password }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.detail || 'CPF ou senha inválidos');
+  return data as { access_token: string; refresh_token: string; user: User };
+}
 
 export async function uploadImage(uri: string, name = 'photo.jpg', type = 'image/jpeg'): Promise<string> {
   const token = await storage.get('access_token');

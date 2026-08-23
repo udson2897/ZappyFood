@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { storage } from '../lib/storage';
-import { api, User, Role, setOnLogout } from '../lib/api';
+import { api, User, Role, setOnLogout, courierRegister, courierLoginApi } from '../lib/api';
 
 type AuthCtx = {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<User>;
   signUp: (name: string, email: string, password: string, role: Role, phone?: string) => Promise<User>;
+  signInCourier: (cpf: string, password: string) => Promise<User>;
+  registerCourier: (payload: { name: string; cpf: string; plate: string; renavam: string }) => Promise<User>;
   signOut: () => Promise<void>;
   switchRole: (r: Role) => Promise<void>;
   refresh: () => Promise<void>;
@@ -56,6 +58,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => { await clear(); };
 
+  const signInCourier = async (cpf: string, password: string) => {
+    const res = await courierLoginApi(cpf, password);
+    await storage.set('access_token', res.access_token);
+    await storage.set('refresh_token', res.refresh_token);
+    setUser(res.user);
+    return res.user;
+  };
+
+  const registerCourier = async (payload: { name: string; cpf: string; plate: string; renavam: string }) => {
+    const res = await courierRegister(payload);
+    await storage.set('access_token', res.access_token);
+    await storage.set('refresh_token', res.refresh_token);
+    setUser(res.user);
+    return res.user;
+  };
+
   const switchRole = async (r: Role) => {
     const u = await api.switchRole(r);
     setUser(u);
@@ -69,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <Ctx.Provider value={{ user, loading, signIn, signUp, signOut, switchRole, refresh }}>
+    <Ctx.Provider value={{ user, loading, signIn, signUp, signInCourier, registerCourier, signOut, switchRole, refresh }}>
       {children}
     </Ctx.Provider>
   );

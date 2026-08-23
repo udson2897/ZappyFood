@@ -106,7 +106,7 @@ export default function Dashboard() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.bigCardTitle}>Entregadores</Text>
-            <Text style={styles.bigCardSub}>Cadastre e gerencie sua equipe</Text>
+            <Text style={styles.bigCardSub}>Convide pelo ID e gerencie sua equipe</Text>
           </View>
           <Ionicons name="chevron-forward" size={22} color={colors.onSurfaceTertiary} />
         </Pressable>

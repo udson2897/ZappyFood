@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, TextInput, Pressable, StyleSheet, ScrollView, ActivityIndicator,
-  Platform, Linking, RefreshControl,
+  Platform, Linking, RefreshControl, Modal, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
+import { useAudioPlayer } from "expo-audio";
 import { colors, spacing, radius, font, brl, STATUS_LABELS, STATUS_COLORS } from "@/src/theme";
 import { api } from "@/src/lib/api";
 import { useAuth } from "@/src/auth/AuthContext";
 import LiveMap from "@/src/components/LiveMap";
 
+const beepSound = require("../../assets/sounds/beep.wav");
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
 const API = `${BASE}/api`;
 
@@ -32,8 +34,59 @@ export default function EntregadorHome() {
   const [gpsInfo, setGpsInfo] = useState("");
   const [balance, setBalance] = useState<any>(null);
   const [balLoading, setBalLoading] = useState(false);
+  const [offers, setOffers] = useState<any[]>([]);
+  const [invites, setInvites] = useState<any[]>([]);
+  const [activeOffer, setActiveOffer] = useState<any>(null);
+  const seenOffers = useRef<Set<string>>(new Set());
+  const player = useAudioPlayer(beepSound);
   const webWatchId = useRef<number | null>(null);
   const nativeWatch = useRef<Location.LocationSubscription | null>(null);
+
+  const playBeep = useCallback(() => {
+    try { player.seekTo(0); player.play(); } catch {}
+  }, [player]);
+
+  const pollOffersInvites = useCallback(async () => {
+    try {
+      const [ofs, invs] = await Promise.all([
+        api.courierOffers().catch(() => []),
+        api.courierInvites().catch(() => []),
+      ]);
+      setInvites(invs);
+      const newOne = ofs.find((o: any) => !seenOffers.current.has(o.id));
+      ofs.forEach((o: any) => seenOffers.current.add(o.id));
+      setOffers(ofs);
+      if (newOne) {
+        playBeep();
+        setActiveOffer((cur: any) => cur || newOne);
+      }
+    } catch {}
+  }, [playBeep]);
+
+  useFocusEffect(useCallback(() => {
+    pollOffersInvites();
+    const t = setInterval(pollOffersInvites, 8000);
+    return () => clearInterval(t);
+  }, [pollOffersInvites]));
+
+  const respondOffer = async (accept: boolean) => {
+    if (!activeOffer) return;
+    try {
+      await api.respondOffer(activeOffer.id, accept);
+      seenOffers.current.delete(activeOffer.id);
+    } catch (e: any) {
+      Alert.alert("Erro", e?.message || "Falha ao responder.");
+    }
+    setActiveOffer(null);
+    pollOffersInvites();
+    loadOrders();
+    setBalance(null);
+  };
+
+  const respondInvite = async (link: any, accept: boolean) => {
+    try { await api.respondInvite(link.id, accept); } catch {}
+    pollOffersInvites();
+  };
 
   const loadOrders = useCallback(async () => {
     try { setOrders(await api.courierMyOrders()); } finally { setRefreshing(false); }
@@ -71,15 +124,26 @@ export default function EntregadorHome() {
     }).catch(() => {});
   };
 
-  const openGoogleMaps = (lat: number, lng: number) => {
-    Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`);
+  const openMaps = (lat: number, lng: number, app: "google" | "waze") => {
+    const url = app === "waze"
+      ? `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
+      : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+    Linking.openURL(url);
+  };
+
+  const chooseNav = (lat: number, lng: number) => {
+    Alert.alert("Abrir navegação", "Escolha o app de navegação:", [
+      { text: "Google Maps", onPress: () => openMaps(lat, lng, "google") },
+      { text: "Waze", onPress: () => openMaps(lat, lng, "waze") },
+      { text: "Cancelar", style: "cancel" },
+    ]);
   };
 
   const startRoute = async () => {
     const addr = order?.address;
     if (!addr || addr.lat == null || addr.lng == null) { setError("Este pedido não tem coordenadas do cliente."); return; }
     setRouteStarted(true);
-    openGoogleMaps(addr.lat, addr.lng);
+    chooseNav(addr.lat, addr.lng);
     if (Platform.OS === "web") {
       if (navigator?.geolocation) {
         webWatchId.current = navigator.geolocation.watchPosition(
@@ -165,6 +229,23 @@ export default function EntregadorHome() {
           keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadOrders(); }} tintColor={colors.brand} />}
         >
+          {invites.length > 0 && (
+            <View style={styles.invitesBox} testID="entregador-invites">
+              <Text style={styles.invitesTitle}>Convites de lojas</Text>
+              {invites.map((iv) => (
+                <View key={iv.id} style={styles.inviteRow}>
+                  <Ionicons name="storefront" size={20} color={colors.brand} />
+                  <Text style={styles.inviteName}>{iv.store_name}</Text>
+                  <Pressable testID={`invite-accept-${iv.id}`} style={styles.inviteAccept} onPress={() => respondInvite(iv, true)}>
+                    <Text style={styles.inviteAcceptText}>Aceitar</Text>
+                  </Pressable>
+                  <Pressable testID={`invite-reject-${iv.id}`} style={styles.inviteReject} onPress={() => respondInvite(iv, false)}>
+                    <Text style={styles.inviteRejectText}>Recusar</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
           <Text style={styles.label}>Buscar pedido pelo número</Text>
           <View style={styles.searchRow}>
             <TextInput
@@ -232,9 +313,9 @@ export default function EntregadorHome() {
                           <LiveMap code={order.code} dest={{ lat: addr.lat, lng: addr.lng }} store={order.store} height={260} />
                         </View>
                       )}
-                      <Pressable testID="entregador-reopen-maps" style={styles.secondaryBtn} onPress={() => openGoogleMaps(addr.lat, addr.lng)}>
+                      <Pressable testID="entregador-reopen-maps" style={styles.secondaryBtn} onPress={() => chooseNav(addr.lat, addr.lng)}>
                         <Ionicons name="map" size={18} color={colors.brand} />
-                        <Text style={styles.secondaryText}>Reabrir Google Maps</Text>
+                        <Text style={styles.secondaryText}>Reabrir navegação</Text>
                       </Pressable>
                       <Pressable testID="entregador-finish" style={styles.finishBtn} onPress={finish} disabled={finishing}>
                         {finishing ? <ActivityIndicator color="#fff" /> : (
@@ -311,21 +392,74 @@ export default function EntregadorHome() {
           ) : null}
         </ScrollView>
       )}
+
+      <Modal visible={!!activeOffer} transparent animationType="slide" onRequestClose={() => respondOffer(false)}>
+        <View style={styles.modalWrap}>
+          <View style={styles.offerCard} testID="offer-modal">
+            <View style={styles.offerBell}><Ionicons name="notifications" size={28} color="#fff" /></View>
+            <Text style={styles.offerTitle}>Novo pedido para entrega</Text>
+            {activeOffer && (
+              <>
+                <Text style={styles.offerStore}>{activeOffer.store_name} • #{activeOffer.code}</Text>
+                <View style={styles.offerRow}>
+                  <Ionicons name="cube" size={18} color={colors.brand} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.offerLabel}>Coleta</Text>
+                    <Text style={styles.offerText}>{activeOffer.pickup?.name}{activeOffer.pickup?.address?.street ? ` — ${activeOffer.pickup.address.street}, ${activeOffer.pickup.address.number || ""}` : ""}</Text>
+                  </View>
+                </View>
+                <View style={styles.offerRow}>
+                  <Ionicons name="location" size={18} color={colors.success} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.offerLabel}>Entrega</Text>
+                    <Text style={styles.offerText}>
+                      {activeOffer.delivery ? `${activeOffer.delivery.street}, ${activeOffer.delivery.number} • ${activeOffer.delivery.neighborhood}, ${activeOffer.delivery.city}` : "—"}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.offerFee}>Você recebe {brl(activeOffer.delivery_fee || 0)}</Text>
+                <View style={styles.offerActions}>
+                  <Pressable testID="offer-refuse" style={styles.refuseBtn} onPress={() => respondOffer(false)}>
+                    <Text style={styles.refuseText}>Recusar</Text>
+                  </Pressable>
+                  <Pressable testID="offer-accept" style={styles.acceptBtn} onPress={() => respondOffer(true)}>
+                    <Text style={styles.acceptText}>Aceitar</Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 function BalRow({ label, icon, data, highlight }: { label: string; icon: any; data: any; highlight?: boolean }) {
   return (
-    <View style={[styles.balRow, highlight && styles.balRowHi]}>
-      <View style={[styles.balIcon, highlight && { backgroundColor: colors.brand }]}>
-        <Ionicons name={icon} size={18} color={highlight ? "#fff" : colors.brand} />
+    <View style={styles.balBlock}>
+      <View style={[styles.balRow, highlight && styles.balRowHi]}>
+        <View style={[styles.balIcon, highlight && { backgroundColor: colors.brand }]}>
+          <Ionicons name={icon} size={18} color={highlight ? "#fff" : colors.brand} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.balLabel}>{label}</Text>
+          <Text style={styles.balCount}>{data?.count || 0} entrega{(data?.count || 0) !== 1 ? "s" : ""}</Text>
+        </View>
+        <Text style={[styles.balValue, highlight && { color: colors.brand }]}>{brl(data?.total || 0)}</Text>
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.balLabel}>{label}</Text>
-        <Text style={styles.balCount}>{data?.count || 0} entrega{(data?.count || 0) !== 1 ? "s" : ""}</Text>
-      </View>
-      <Text style={[styles.balValue, highlight && { color: colors.brand }]}>{brl(data?.total || 0)}</Text>
+      {(data?.stores || []).length > 0 && (
+        <View style={styles.storeBreak}>
+          {data.stores.map((s: any, i: number) => (
+            <View key={i} style={styles.storeBreakRow}>
+              <Ionicons name="storefront-outline" size={13} color={colors.onSurfaceSecondary} />
+              <Text style={styles.storeBreakName} numberOfLines={1}>{s.store_name}</Text>
+              <Text style={styles.storeBreakCount}>{s.count}x</Text>
+              <Text style={styles.storeBreakTotal}>{brl(s.total)}</Text>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -378,8 +512,8 @@ const styles = StyleSheet.create({
   hint: { alignItems: "center", padding: spacing.xxl },
   hintText: { color: colors.onSurfaceSecondary, textAlign: "center", marginTop: spacing.md },
   balHint: { color: colors.onSurfaceSecondary, marginBottom: spacing.md, fontSize: font.size.sm },
-  balRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.divider },
-  balRowHi: { borderTopWidth: 0 },
+  balRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md },
+  balRowHi: {},
   balIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
   balLabel: { fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg },
   balCount: { color: colors.onSurfaceSecondary, fontSize: font.size.sm, marginTop: 2 },
@@ -391,4 +525,32 @@ const styles = StyleSheet.create({
   histCode: { fontWeight: "700", color: colors.brand, fontSize: font.size.base },
   histSub: { color: colors.onSurfaceSecondary, fontSize: font.size.sm, marginTop: 1 },
   histFee: { fontWeight: "800", color: colors.onSurface, fontSize: font.size.lg },
+  invitesBox: { backgroundColor: colors.brandTertiary, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
+  invitesTitle: { fontWeight: "800", color: colors.onSurface, marginBottom: spacing.sm },
+  inviteRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: 6 },
+  inviteName: { flex: 1, fontWeight: "700", color: colors.onSurface },
+  inviteAccept: { backgroundColor: colors.success, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 6 },
+  inviteAcceptText: { color: "#fff", fontWeight: "700", fontSize: font.size.sm },
+  inviteReject: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 6 },
+  inviteRejectText: { color: colors.error, fontWeight: "700", fontSize: font.size.sm },
+  modalWrap: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  offerCard: { backgroundColor: colors.surface, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, padding: spacing.xl, gap: spacing.md },
+  offerBell: { alignSelf: "center", width: 56, height: 56, borderRadius: 28, backgroundColor: colors.brand, alignItems: "center", justifyContent: "center" },
+  offerTitle: { fontSize: font.size.xl, fontWeight: "800", color: colors.onSurface, textAlign: "center" },
+  offerStore: { textAlign: "center", color: colors.onSurfaceSecondary, fontWeight: "600" },
+  offerRow: { flexDirection: "row", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, alignItems: "flex-start" },
+  offerLabel: { fontWeight: "700", color: colors.onSurface },
+  offerText: { color: colors.onSurfaceSecondary, marginTop: 2 },
+  offerFee: { textAlign: "center", fontSize: font.size.xl, fontWeight: "800", color: colors.success },
+  offerActions: { flexDirection: "row", gap: spacing.md, marginTop: spacing.sm },
+  refuseBtn: { flex: 1, borderWidth: 1, borderColor: colors.error, borderRadius: radius.md, paddingVertical: spacing.lg, alignItems: "center" },
+  refuseText: { color: colors.error, fontWeight: "800", fontSize: font.size.lg },
+  acceptBtn: { flex: 1, backgroundColor: colors.success, borderRadius: radius.md, paddingVertical: spacing.lg, alignItems: "center" },
+  acceptText: { color: "#fff", fontWeight: "800", fontSize: font.size.lg },
+  balBlock: { borderTopWidth: 1, borderTopColor: colors.divider },
+  storeBreak: { paddingLeft: 52, paddingBottom: spacing.sm, gap: 4 },
+  storeBreakRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  storeBreakName: { flex: 1, color: colors.onSurfaceSecondary, fontSize: font.size.sm },
+  storeBreakCount: { color: colors.onSurfaceTertiary, fontSize: font.size.sm, width: 34, textAlign: "right" },
+  storeBreakTotal: { color: colors.onSurface, fontWeight: "700", fontSize: font.size.sm, width: 72, textAlign: "right" },
 });
