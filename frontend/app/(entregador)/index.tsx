@@ -36,6 +36,7 @@ export default function EntregadorHome() {
   const [balance, setBalance] = useState<any>(null);
   const [balLoading, setBalLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [invites, setInvites] = useState<any[]>([]);
   const [activeOffer, setActiveOffer] = useState<any>(null);
   const seenOffers = useRef<Set<string>>(new Set());
@@ -131,26 +132,31 @@ export default function EntregadorHome() {
     }).catch(() => {});
   };
 
-  const openMaps = (lat: number, lng: number, app: "google" | "waze") => {
-    const url = app === "waze"
-      ? `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
-      : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
-    Linking.openURL(url);
+  const buildDest = () => {
+    const a = order?.address;
+    if (a?.lat != null && a?.lng != null) return { coords: `${a.lat},${a.lng}` };
+    const q = [a?.street, a?.number, a?.neighborhood, a?.city, a?.state].filter(Boolean).join(", ");
+    return { query: q };
   };
 
-  const chooseNav = (lat: number, lng: number) => {
-    Alert.alert("Abrir navegação", "Escolha o app de navegação:", [
-      { text: "Google Maps", onPress: () => openMaps(lat, lng, "google") },
-      { text: "Waze", onPress: () => openMaps(lat, lng, "waze") },
-      { text: "Cancelar", style: "cancel" },
-    ]);
+  const openMaps = (app: "google" | "waze") => {
+    const d = buildDest();
+    let url: string;
+    if (app === "waze") {
+      url = d.coords ? `https://waze.com/ul?ll=${d.coords}&navigate=yes` : `https://waze.com/ul?q=${encodeURIComponent(d.query || "")}`;
+    } else {
+      const dest = d.coords || encodeURIComponent(d.query || "");
+      url = `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+    }
+    setNavOpen(false);
+    Linking.openURL(url).catch(() => setError("Não foi possível abrir o app de navegação."));
   };
 
   const startRoute = async () => {
     const addr = order?.address;
-    if (!addr || addr.lat == null || addr.lng == null) { setError("Este pedido não tem coordenadas do cliente."); return; }
+    if (!addr || (!addr.street && addr.lat == null)) { setError("Este pedido não tem endereço do cliente."); return; }
     setRouteStarted(true);
-    chooseNav(addr.lat, addr.lng);
+    setNavOpen(true);
     if (Platform.OS === "web") {
       if (navigator?.geolocation) {
         webWatchId.current = navigator.geolocation.watchPosition(
@@ -204,6 +210,7 @@ export default function EntregadorHome() {
 
   const addr = order?.address;
   const hasCoords = addr && addr.lat != null && addr.lng != null;
+  const canRoute = !!addr && (hasCoords || !!addr.street);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -319,7 +326,7 @@ export default function EntregadorHome() {
               ) : (
                 <>
                   {!routeStarted ? (
-                    <Pressable testID="entregador-start-route" style={[styles.primaryBtn, !hasCoords && { opacity: 0.5 }]} disabled={!hasCoords} onPress={startRoute}>
+                    <Pressable testID="entregador-start-route" style={[styles.primaryBtn, !canRoute && { opacity: 0.5 }]} disabled={!canRoute} onPress={startRoute}>
                       <Ionicons name="navigate" size={20} color="#fff" />
                       <Text style={styles.primaryText}>Iniciar rota</Text>
                     </Pressable>
@@ -334,9 +341,9 @@ export default function EntregadorHome() {
                           <LiveMap code={order.code} dest={{ lat: addr.lat, lng: addr.lng }} store={order.store} height={260} />
                         </View>
                       )}
-                      <Pressable testID="entregador-reopen-maps" style={styles.secondaryBtn} onPress={() => chooseNav(addr.lat, addr.lng)}>
+                      <Pressable testID="entregador-reopen-maps" style={styles.secondaryBtn} onPress={() => setNavOpen(true)}>
                         <Ionicons name="map" size={18} color={colors.brand} />
-                        <Text style={styles.secondaryText}>Reabrir navegação</Text>
+                        <Text style={styles.secondaryText}>Abrir navegação</Text>
                       </Pressable>
                       <Pressable testID="entregador-finish" style={styles.finishBtn} onPress={finish} disabled={finishing}>
                         {finishing ? <ActivityIndicator color="#fff" /> : (
@@ -413,6 +420,26 @@ export default function EntregadorHome() {
           ) : null}
         </ScrollView>
       )}
+
+      <Modal visible={navOpen} transparent animationType="fade" onRequestClose={() => setNavOpen(false)}>
+        <Pressable style={styles.navWrap} onPress={() => setNavOpen(false)}>
+          <View style={styles.navCard} testID="nav-modal">
+            <Text style={styles.navTitle}>Abrir navegação</Text>
+            <Text style={styles.navSub}>Escolha o app para traçar a rota até o cliente</Text>
+            <Pressable testID="nav-google" style={[styles.navBtn, { backgroundColor: "#1a73e8" }]} onPress={() => openMaps("google")}>
+              <Ionicons name="navigate" size={20} color="#fff" />
+              <Text style={styles.navBtnText}>Google Maps</Text>
+            </Pressable>
+            <Pressable testID="nav-waze" style={[styles.navBtn, { backgroundColor: "#33ccff" }]} onPress={() => openMaps("waze")}>
+              <Ionicons name="car-sport" size={20} color="#fff" />
+              <Text style={styles.navBtnText}>Waze</Text>
+            </Pressable>
+            <Pressable testID="nav-cancel" style={styles.navCancel} onPress={() => setNavOpen(false)}>
+              <Text style={styles.navCancelText}>Cancelar</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
 
       <Modal visible={!!activeOffer} transparent animationType="slide" onRequestClose={() => respondOffer(false)}>
         <View style={styles.modalWrap}>
@@ -562,6 +589,14 @@ const styles = StyleSheet.create({
   inviteReject: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 6 },
   inviteRejectText: { color: colors.error, fontWeight: "700", fontSize: font.size.sm },
   modalWrap: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  navWrap: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", padding: spacing.xl },
+  navCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.xl, gap: spacing.md },
+  navTitle: { fontSize: font.size.xl, fontWeight: "800", color: colors.onSurface, textAlign: "center" },
+  navSub: { color: colors.onSurfaceSecondary, textAlign: "center", fontSize: font.size.sm },
+  navBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, borderRadius: radius.md, paddingVertical: spacing.lg },
+  navBtnText: { color: "#fff", fontWeight: "800", fontSize: font.size.lg },
+  navCancel: { alignItems: "center", paddingVertical: spacing.sm },
+  navCancelText: { color: colors.onSurfaceSecondary, fontWeight: "700" },
   offerCard: { backgroundColor: colors.surface, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, padding: spacing.xl, gap: spacing.md },
   offerBell: { alignSelf: "center", width: 56, height: 56, borderRadius: 28, backgroundColor: colors.brand, alignItems: "center", justifyContent: "center" },
   offerTitle: { fontSize: font.size.xl, fontWeight: "800", color: colors.onSurface, textAlign: "center" },

@@ -25,6 +25,9 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 24 (2026-08-23) — Bug fix: navegação (Google Maps/Waze) do entregador
+- [x] Corrigido: após aceitar a entrega, "Iniciar rota" não abria o Google Maps. Causa: seleção via `Alert.alert` (não confiável no web) e botão desabilitado quando o endereço não tinha coordenadas. Correção: **modal in-app** "Abrir navegação" com botões Google Maps/Waze (`nav-modal`, `nav-google`, `nav-waze`), botão habilita com coords OU rua, e fallback para busca por endereço textual quando não há lat/lng. Botão "Abrir navegação" reabre o modal. Verificado pelo testing_agent (backend 4/4, frontend OK, iteration_11).
+
 ### Iter 23 (2026-08-23) — ID do entregador em destaque + entregador de teste
 - [x] No app do entregador, card em destaque (logo abaixo do cabeçalho) com "Seu ID de entregador" mostrando o `courier_code` em fonte grande e botão **Copiar** (expo-clipboard; muda para "Copiado!"). Facilita compartilhar o ID com o lojista.
 - [x] Criado entregador de teste: nome "Entregador Teste", CPF `00000000000`, senha `00000000000`, placa ABC1234, renavam 00000000000, ID `ZF-546RT`. (E-mail não é usado no modelo do entregador; login é por CPF+senha.)
