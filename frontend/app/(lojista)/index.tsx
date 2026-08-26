@@ -100,6 +100,17 @@ export default function Dashboard() {
           <Ionicons name="chevron-forward" size={22} color={colors.onSurfaceTertiary} />
         </Pressable>
 
+        <Pressable testID="dash-goto-finance" style={styles.promoCard} onPress={() => router.push("/(lojista)/finance")}>
+          <View style={styles.promoIcon}>
+            <Ionicons name="stats-chart" size={22} color={colors.brand} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bigCardTitle}>Relatório financeiro</Text>
+            <Text style={styles.bigCardSub}>Faturamento por dia, semana e mês</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={colors.onSurfaceTertiary} />
+        </Pressable>
+
         <Pressable testID="dash-goto-couriers" style={styles.promoCard} onPress={() => router.push("/(lojista)/couriers")}>
           <View style={styles.promoIcon}>
             <Ionicons name="bicycle" size={22} color={colors.brand} />

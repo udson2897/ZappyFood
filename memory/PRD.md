@@ -25,6 +25,9 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 25 (2026-08-26) — Relatório financeiro do lojista
+- [x] Nova tela `(lojista)/finance.tsx` com faturamento por **Hoje / Esta semana / Este mês** e seleção de **dia específico** (navegação Ontem/Hoje/datas). Cada período mostra: nº de pedidos, faturamento (soma dos subtotais/produtos), total recebido e taxas de entrega. Backend `GET /api/my/finance?date=YYYY-MM-DD` agregando pedidos FINALIZADO de todas as lojas do dono (fuso America/Sao_Paulo). Atalho no dashboard (card "Relatório financeiro"). Testado (curl + screenshot).
+
 ### Iter 24 (2026-08-23) — Bug fix: navegação (Google Maps/Waze) do entregador
 - [x] Corrigido: após aceitar a entrega, "Iniciar rota" não abria o Google Maps. Causa: seleção via `Alert.alert` (não confiável no web) e botão desabilitado quando o endereço não tinha coordenadas. Correção: **modal in-app** "Abrir navegação" com botões Google Maps/Waze (`nav-modal`, `nav-google`, `nav-waze`), botão habilita com coords OU rua, e fallback para busca por endereço textual quando não há lat/lng. Botão "Abrir navegação" reabre o modal. Verificado pelo testing_agent (backend 4/4, frontend OK, iteration_11).
 

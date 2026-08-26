@@ -59,6 +59,7 @@ export default function LojistaLayout() {
       <Tabs.Screen name="promotions" options={{ href: null }} />
       <Tabs.Screen name="couriers" options={{ href: null }} />
       <Tabs.Screen name="courier-report" options={{ href: null }} />
+      <Tabs.Screen name="finance" options={{ href: null }} />
     </Tabs>
   );
 }

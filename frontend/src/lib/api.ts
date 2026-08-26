@@ -162,6 +162,7 @@ export const api = {
   deleteCourier: (id: string) => apiFetch<any>(`/my/couriers/${id}`, { method: 'DELETE' }),
   assignCourier: (oid: string, courier_id: string) => apiFetch<any>(`/orders/${oid}/assign-courier`, { method: 'PATCH', body: JSON.stringify({ courier_id }) }),
   courierReport: (date?: string) => apiFetch<any>(`/my/couriers/report${date ? `?date=${date}` : ''}`),
+  finance: (date?: string) => apiFetch<any>(`/my/finance${date ? `?date=${date}` : ''}`),
   inviteCourier: (courier_code: string) => apiFetch<any>('/my/couriers/invite', { method: 'POST', body: JSON.stringify({ courier_code }) }),
   removeCourierLink: (courier_id: string) => apiFetch<any>(`/my/couriers/${courier_id}`, { method: 'DELETE' }),
   // entregador (autenticado)

@@ -1449,6 +1449,72 @@ async def courier_finish(code: str):
     return {"ok": True, "status": "FINALIZADO"}
 
 
+@api.get("/my/finance")
+async def my_finance(date: Optional[str] = None, user=Depends(require_role("lojista", "admin"))):
+    """Faturamento do lojista (pedidos finalizados) por dia/semana/mês + dia específico opcional.
+    revenue = soma dos subtotais (produtos); delivery = taxas de entrega; total = valor total. Fuso America/Sao_Paulo."""
+    stores = await db.stores.find({"owner_id": user["id"]}, {"id": 1, "_id": 0}).to_list(100)
+    ids = [s["id"] for s in stores]
+    empty = {"count": 0, "revenue": 0.0, "delivery": 0.0, "total": 0.0}
+    if not ids:
+        return {"today": empty, "week": empty, "month": empty, "selected": None}
+    now_br = datetime.now(BR_TZ)
+    day_start = now_br.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = day_start - timedelta(days=day_start.weekday())
+    month_start = day_start.replace(day=1)
+    sel_start = sel_end = None
+    if date:
+        try:
+            d = datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(400, "Data inválida (use YYYY-MM-DD)")
+        sel_start = datetime(d.year, d.month, d.day, 0, 0, 0, tzinfo=BR_TZ)
+        sel_end = sel_start + timedelta(days=1)
+
+    orders = await db.orders.find(
+        {"store_id": {"$in": ids}, "status": "FINALIZADO"}, {"_id": 0}
+    ).to_list(5000)
+
+    def bucket():
+        return {"count": 0, "revenue": 0.0, "delivery": 0.0, "total": 0.0}
+
+    today, week, month, selected = bucket(), bucket(), bucket(), bucket()
+    for o in orders:
+        try:
+            dt = datetime.fromisoformat(_finalized_at(o))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            dt_br = dt.astimezone(BR_TZ)
+        except Exception:
+            continue
+        rev = round(float(o.get("subtotal", 0) or 0), 2)
+        dely = round(float(o.get("delivery_fee", 0) or 0), 2)
+        tot = round(float(o.get("total", 0) or 0), 2)
+
+        def add(b):
+            b["count"] += 1
+            b["revenue"] += rev
+            b["delivery"] += dely
+            b["total"] += tot
+
+        if dt_br >= month_start:
+            add(month)
+        if dt_br >= week_start:
+            add(week)
+        if dt_br >= day_start:
+            add(today)
+        if sel_start and sel_start <= dt_br < sel_end:
+            add(selected)
+
+    for b in (today, week, month, selected):
+        for k in ("revenue", "delivery", "total"):
+            b[k] = round(b[k], 2)
+    return {
+        "today": today, "week": week, "month": month,
+        "selected": ({"date": date, **selected} if date else None),
+    }
+
+
 @api.post("/orders/{oid}/rating")
 async def rate_order(oid: str, data: RatingIn, user=Depends(current_user)):
     order = await db.orders.find_one({"id": oid})
