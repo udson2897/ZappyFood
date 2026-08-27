@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 12 validated the lojista 'Remover entregador' (delete courier link) fix end-to-end. Backend 6/6 tests passing (test_iter12_courier_remove.py): register a TEST courier -> POST /api/my/couriers/invite -> courier accepts via /courier/me/invites/{id}/respond -> GET /api/my/couriers contains courier with status='accepted' -> DELETE /api/my/couriers/{courier_id} returns {ok:true} -> GET /api/my/couriers no longer contains that id. Idempotent second DELETE still returns ok:true. Auth-role checks: cliente token -> 403, no token -> 401. Frontend UI verified on mobile viewport (390x844): demo lojista login (sign-in-demo-lojista + sign-in-submit) -> dashboard -> dash-goto-couriers -> couriers list shows 8 rows including 'TEST_UIRemove Alpha' (ZF-MNUGX). Tapping courier-remove-<id> opens courier-remove-modal. Tapping courier-remove-cancel closes modal and keeps the row. Tapping courier-remove-confirm triggers DELETE /api/my/couriers/{id}, closes the modal, reloads list, and the row disappears (8 -> 7 rows). Bug (Alert.alert 3-buttons not firing on RN Web) is fixed via in-app Modal.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter12_courier_remove.py",
+    "/app/test_reports/pytest/iter12_courier_remove.xml"
+  ],
+  "action_items": [
+    "None for this bug. Optional cleanup: consider deleting seeded/leftover TEST_* couriers from earlier iterations (Rafael/Carlos/TEST_Courier_* etc.) to keep the lojista list tidy in future demos."
+  ],
+  "critical_code_review_comments": [
+    "app/(lojista)/couriers.tsx (173 lines): clean and focused; state machine (confirm/removing) is correct; disabled during removing prevents double-tap.",
+    "doRemove() calls load() after successful DELETE which refetches /my/couriers — good; UI reflects removal deterministically instead of local splice.",
+    "Backend DELETE /api/my/couriers/{courier_id} uses delete_one and returns {ok:true} even when nothing matched — this is idempotent-friendly but does not distinguish 'not found'; acceptable for this UX (frontend doesn't need to differentiate).",
+    "Console warnings persist: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' and 'props.pointerEvents is deprecated. Use style.pointerEvents.' — RN Web deprecations, non-blocking; already noted in prior iterations."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter12_courier_remove.py (new regression tests for DELETE /api/my/couriers/{id})"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% (open modal, cancel, confirm-remove)"},
+  "seed_data_creation": "Created one temporary courier 'TEST_UIRemove Alpha' (courier_code ZF-MNUGX, id 1cd74826-6936-4448-b68b-2ed1a71f8ef3) that was linked to the lojista then removed as part of the UI test. Backend tests also create ephemeral TEST_Rem* couriers per run; they are unlinked at end of the test module (deleted from store_couriers).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Fix is confirmed working. Delete flow testIDs: courier-remove-<id> (trash), courier-remove-modal (container), courier-remove-cancel, courier-remove-confirm. Backend endpoint: DELETE /api/my/couriers/{courier_id} (auth role lojista/admin) returns {ok:true}. Lojista list currently contains ~7 couriers (Entregador Teste, Rafael Teste, TEST_Courier_1154, TEST_Courier_5683, TEST_UI_Courier_8693, Udson Diego, TEST_Pending_7260). Prior invite/accept flow is exercised via /api/my/couriers/invite and /api/courier/me/invites/{link_id}/respond.",
+  "rca_of_issue": "Original bug: on React Native Web, Alert.alert() with more than 2 buttons does not render a usable confirmation dialog and its onPress callbacks are never invoked, so tapping the trash icon appeared to do nothing. Fix (verified): in /app/frontend/app/(lojista)/couriers.tsx the trash press now calls setConfirm(courier) which opens an in-app <Modal testID='courier-remove-modal'> containing 'Cancelar' (courier-remove-cancel -> setConfirm(null)) and 'Remover' (courier-remove-confirm -> doRemove -> api.removeCourierLink(id) -> DELETE /api/my/couriers/{id} -> setConfirm(null) + load()). Verified in UI: modal opens, Cancel preserves the row, Confirm removes the row (list count decreases and DELETE succeeds)."
+}

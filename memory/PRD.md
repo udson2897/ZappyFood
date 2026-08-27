@@ -25,6 +25,9 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 26 (2026-08-26) — Bug fix: excluir entregador (lojista)
+- [x] Corrigido: excluir entregador da equipe não funcionava. Causa: confirmação via `Alert.alert` (não dispara no RN Web). Correção: **modal de confirmação in-app** (`courier-remove-modal`) com Cancelar/Remover que chama `DELETE /api/my/couriers/{id}` e recarrega. Verificado pelo testing_agent (backend 6/6, frontend: item some da lista, iteration_12).
+
 ### Iter 25 (2026-08-26) — Relatório financeiro do lojista
 - [x] Nova tela `(lojista)/finance.tsx` com faturamento por **Hoje / Esta semana / Este mês** e seleção de **dia específico** (navegação Ontem/Hoje/datas). Cada período mostra: nº de pedidos, faturamento (soma dos subtotais/produtos), total recebido e taxas de entrega. Backend `GET /api/my/finance?date=YYYY-MM-DD` agregando pedidos FINALIZADO de todas as lojas do dono (fuso America/Sao_Paulo). Atalho no dashboard (card "Relatório financeiro"). Testado (curl + screenshot).
 

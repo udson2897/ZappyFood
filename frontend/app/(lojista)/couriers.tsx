@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, TextInput,
-  KeyboardAvoidingView, Platform, Alert, RefreshControl,
+  KeyboardAvoidingView, Platform, Alert, RefreshControl, Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -16,6 +16,8 @@ export default function Couriers() {
   const [refreshing, setRefreshing] = useState(false);
   const [code, setCode] = useState("");
   const [inviting, setInviting] = useState(false);
+  const [confirm, setConfirm] = useState<any>(null);
+  const [removing, setRemoving] = useState(false);
 
   const load = useCallback(async () => {
     try { setList(await api.couriers()); }
@@ -38,11 +40,20 @@ export default function Couriers() {
     } finally { setInviting(false); }
   };
 
-  const removeLink = (c: any) => {
-    Alert.alert("Remover entregador", `Remover ${c.name} da sua equipe?`, [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Remover", style: "destructive", onPress: async () => { await api.removeCourierLink(c.id); load(); } },
-    ]);
+  const removeLink = (c: any) => setConfirm(c);
+
+  const doRemove = async () => {
+    if (!confirm) return;
+    setRemoving(true);
+    try {
+      await api.removeCourierLink(confirm.id);
+      setConfirm(null);
+      load();
+    } catch (e: any) {
+      Alert.alert("Erro", e?.message || "Não foi possível remover.");
+    } finally {
+      setRemoving(false);
+    }
   };
 
   return (
@@ -106,6 +117,24 @@ export default function Couriers() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal visible={!!confirm} transparent animationType="fade" onRequestClose={() => setConfirm(null)}>
+        <View style={styles.modalWrap}>
+          <View style={styles.confirmCard} testID="courier-remove-modal">
+            <Ionicons name="alert-circle" size={40} color={colors.error} />
+            <Text style={styles.confirmTitle}>Remover entregador</Text>
+            <Text style={styles.confirmText}>Remover {confirm?.name} da sua equipe? Ele não receberá mais pedidos desta loja.</Text>
+            <View style={styles.confirmActions}>
+              <Pressable testID="courier-remove-cancel" style={styles.cancelBtn} onPress={() => setConfirm(null)} disabled={removing}>
+                <Text style={styles.cancelText}>Cancelar</Text>
+              </Pressable>
+              <Pressable testID="courier-remove-confirm" style={styles.removeConfirmBtn} onPress={doRemove} disabled={removing}>
+                {removing ? <ActivityIndicator color="#fff" /> : <Text style={styles.removeConfirmText}>Remover</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -131,4 +160,13 @@ const styles = StyleSheet.create({
   iconBtn: { padding: 6 },
   empty: { alignItems: "center", padding: spacing.xxl },
   emptyText: { color: colors.onSurfaceSecondary, marginTop: spacing.sm, textAlign: "center" },
+  modalWrap: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", padding: spacing.xl },
+  confirmCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.xl, alignItems: "center", gap: spacing.sm },
+  confirmTitle: { fontSize: font.size.xl, fontWeight: "800", color: colors.onSurface },
+  confirmText: { color: colors.onSurfaceSecondary, textAlign: "center" },
+  confirmActions: { flexDirection: "row", gap: spacing.md, marginTop: spacing.md, alignSelf: "stretch" },
+  cancelBtn: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: "center" },
+  cancelText: { color: colors.onSurface, fontWeight: "700" },
+  removeConfirmBtn: { flex: 1, backgroundColor: colors.error, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: "center" },
+  removeConfirmText: { color: "#fff", fontWeight: "800" },
 });
