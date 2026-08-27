@@ -5,11 +5,9 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, font, brl } from "@/src/theme";
 import { api } from "@/src/lib/api";
-import { useAuth } from "@/src/auth/AuthContext";
 
 export default function Dashboard() {
   const router = useRouter();
-  const { switchRole } = useAuth();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -39,9 +37,6 @@ export default function Dashboard() {
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.header}>
           <Text style={styles.title}>Painel do Lojista</Text>
-          <Pressable testID="dash-switch-customer" onPress={() => switchRole("cliente")}>
-            <Ionicons name="swap-horizontal" size={22} color={colors.brand} />
-          </Pressable>
         </View>
         <View style={styles.emptyStore}>
           <Ionicons name="storefront-outline" size={64} color={colors.onSurfaceTertiary} />
@@ -62,10 +57,6 @@ export default function Dashboard() {
           <Text style={styles.title}>{data.store.fantasy_name}</Text>
           <View style={[styles.statusDot, { backgroundColor: data.store.status === "ABERTA" ? colors.success : colors.error }]} />
         </View>
-        <Pressable testID="dash-switch-customer" style={styles.switchBtn} onPress={() => switchRole("cliente")}>
-          <Ionicons name="swap-horizontal" size={18} color={colors.brand} />
-          <Text style={styles.switchText}>Modo Cliente</Text>
-        </Pressable>
       </View>
 
       <ScrollView

@@ -25,6 +25,9 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - **Cliente**: busca lojas, monta carrinho, faz checkout, acompanha pedido, conversa com a loja.
 - **Lojista**: gerencia loja/produtos, recebe e avança pedidos, conversa com clientes, vê métricas.
 
+### Iter 27 (2026-08-27) — Remoção do botão de trocar de modo
+- [x] Removido o botão de alternar modo (Cliente↔Lojista) do painel do lojista (header e card em index.tsx; botão em settings.tsx) e do perfil do cliente (profile.tsx). Limpeza de imports/handlers não usados. Lint limpo e telas renderizando sem os botões.
+
 ### Iter 26 (2026-08-26) — Bug fix: excluir entregador (lojista)
 - [x] Corrigido: excluir entregador da equipe não funcionava. Causa: confirmação via `Alert.alert` (não dispara no RN Web). Correção: **modal de confirmação in-app** (`courier-remove-modal`) com Cancelar/Remover que chama `DELETE /api/my/couriers/{id}` e recarrega. Verificado pelo testing_agent (backend 6/6, frontend: item some da lista, iteration_12).
 

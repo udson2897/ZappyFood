@@ -20,7 +20,7 @@ const STORE_STATUS = [
 ];
 
 export default function Settings() {
-  const { signOut, switchRole } = useAuth();
+  const { signOut } = useAuth();
   const [store, setStore] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -243,11 +243,6 @@ export default function Settings() {
 
           <Pressable testID="store-save" style={styles.saveBtn} onPress={save} disabled={saving}>
             {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>{store ? "Salvar alterações" : "Criar loja"}</Text>}
-          </Pressable>
-
-          <Pressable testID="settings-switch-customer" style={styles.switchBtn} onPress={() => switchRole("cliente")}>
-            <Ionicons name="swap-horizontal" size={20} color={colors.brand} />
-            <Text style={styles.switchText}>Voltar para modo Cliente</Text>
           </Pressable>
 
           <Pressable testID="settings-logout" style={styles.logout} onPress={signOut}>

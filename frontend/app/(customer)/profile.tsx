@@ -6,13 +6,8 @@ import { colors, spacing, radius, font } from "@/src/theme";
 import { useAuth } from "@/src/auth/AuthContext";
 
 export default function Profile() {
-  const { user, signOut, switchRole } = useAuth();
+  const { user, signOut } = useAuth();
   const router = useRouter();
-
-  const toggle = async () => {
-    const target = user?.active_role === "lojista" ? "cliente" : "lojista";
-    await switchRole(target as any);
-  };
 
   const points = user?.loyalty_points || 0;
 
@@ -26,24 +21,6 @@ export default function Profile() {
           <Text style={styles.name}>{user?.name}</Text>
           <Text style={styles.email}>{user?.email}</Text>
         </View>
-
-        <Pressable
-          testID="profile-switch-role"
-          style={styles.switchCard}
-          onPress={toggle}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={styles.switchTitle}>
-              {user?.active_role === "lojista" ? "Modo Lojista ativo" : "Ir para Modo Lojista"}
-            </Text>
-            <Text style={styles.switchSub}>
-              {user?.active_role === "lojista"
-                ? "Toque para voltar ao modo Cliente"
-                : "Gerencie sua loja e receba pedidos"}
-            </Text>
-          </View>
-          <Ionicons name="swap-horizontal" size={22} color={colors.brand} />
-        </Pressable>
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Fidelidade ZappyFood</Text>
