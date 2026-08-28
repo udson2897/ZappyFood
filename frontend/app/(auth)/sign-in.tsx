@@ -7,10 +7,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Link } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, font, registerThemedStyles } from "@/src/theme";
+import { useTheme } from "@/src/theme-context";
 import { useAuth } from "@/src/auth/AuthContext";
 
 export default function SignIn() {
   const { signIn, signInCourier, registerCourier } = useAuth();
+  const { isDark, toggle } = useTheme();
   const [mode, setMode] = useState<"geral" | "entregador">("geral");
   const [courierMode, setCourierMode] = useState<"entrar" | "cadastrar">("entrar");
   const [email, setEmail] = useState("");
@@ -81,6 +83,14 @@ export default function SignIn() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <Pressable
+        testID="login-dark-toggle"
+        style={styles.themeToggle}
+        onPress={toggle}
+        hitSlop={12}
+      >
+        <Ionicons name={isDark ? "sunny" : "moon"} size={20} color={colors.onSurfaceSecondary} />
+      </Pressable>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -222,6 +232,12 @@ const makeStyles = () => StyleSheet.create({
     marginBottom: spacing.md,
   },
   logoText: { color: "#fff", fontSize: 40, fontWeight: "800" },
+  themeToggle: {
+    position: "absolute", top: spacing.md, right: spacing.lg, zIndex: 10,
+    width: 40, height: 40, borderRadius: radius.pill,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border,
+  },
   title: { fontSize: font.size.huge, fontWeight: "800", color: colors.onSurface },
   subtitle: { color: colors.onSurfaceSecondary, marginTop: spacing.xs, fontSize: font.size.base },
   card: { gap: spacing.sm },
