@@ -1,12 +1,14 @@
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { colors, spacing, radius, font } from "@/src/theme";
+import { colors, spacing, radius, font, registerThemedStyles } from "@/src/theme";
+import { useTheme } from "@/src/theme-context";
 import { useAuth } from "@/src/auth/AuthContext";
 
 export default function Profile() {
   const { user, signOut } = useAuth();
+  const { isDark, toggle } = useTheme();
   const router = useRouter();
 
   const points = user?.loyalty_points || 0;
@@ -23,7 +25,7 @@ export default function Profile() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Fidelidade ZappyFood</Text>
+          <Text style={styles.sectionTitle}>Fidelidade Pratô</Text>
           <Text style={styles.loyaltyText}>{points} pontos acumulados</Text>
           <Text style={styles.loyaltyHint}>Vale {`R$ ${(Math.floor(points / 100) * 2).toFixed(2).replace(".", ",")}`} de desconto. Cada R$ 10,00 gastos = 1 ponto • 100 pontos = R$ 2.</Text>
         </View>
@@ -33,6 +35,23 @@ export default function Profile() {
           <Row icon="receipt-outline" label="Meus pedidos" onPress={() => router.push("/(customer)/orders")} />
           <Row icon="heart-outline" label="Favoritos" />
           <Row icon="help-circle-outline" label="Ajuda" />
+        </View>
+
+        <View style={styles.prefRow}>
+          <View style={styles.prefLeft}>
+            <Ionicons name={isDark ? "moon" : "moon-outline"} size={22} color={colors.brand} />
+            <View>
+              <Text style={styles.prefTitle}>Modo noturno</Text>
+              <Text style={styles.prefSub}>Tema escuro para os olhos</Text>
+            </View>
+          </View>
+          <Switch
+            testID="dark-mode-switch"
+            value={isDark}
+            onValueChange={toggle}
+            trackColor={{ false: colors.borderStrong, true: colors.brand }}
+            thumbColor="#fff"
+          />
         </View>
 
         <Pressable testID="profile-logout" style={styles.logout} onPress={signOut}>
@@ -54,7 +73,7 @@ function Row({ icon, label, onPress }: { icon: any; label: string; onPress?: () 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   userBox: { alignItems: "center", padding: spacing.xl },
   avatar: {
@@ -80,6 +99,10 @@ const styles = StyleSheet.create({
   loyaltyText: { fontSize: font.size.xl, color: colors.brand, fontWeight: "800", marginTop: spacing.xs },
   loyaltyHint: { color: colors.onSurfaceSecondary, marginTop: 4, fontSize: font.size.sm },
   rows: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  prefRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.lg, marginTop: spacing.lg },
+  prefLeft: { flexDirection: "row", alignItems: "center", gap: spacing.md, flex: 1, paddingRight: spacing.md },
+  prefTitle: { color: colors.onSurface, fontWeight: "700", fontSize: font.size.lg },
+  prefSub: { color: colors.onSurfaceSecondary, fontSize: font.size.sm, marginTop: 2 },
   row: {
     flexDirection: "row", alignItems: "center", gap: spacing.md,
     paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
@@ -92,3 +115,5 @@ const styles = StyleSheet.create({
   },
   logoutText: { color: colors.error, fontWeight: "700", fontSize: font.size.lg },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

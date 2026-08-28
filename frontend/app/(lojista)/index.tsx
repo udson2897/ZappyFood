@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Refre
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, radius, font, brl } from "@/src/theme";
+import { colors, spacing, radius, font, brl, registerThemedStyles } from "@/src/theme";
 import { api } from "@/src/lib/api";
 
 export default function Dashboard() {
@@ -153,7 +153,7 @@ function Metric({ label, value, icon, color }: { label: string; value: string; i
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   header: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
@@ -190,3 +190,5 @@ const styles = StyleSheet.create({
   createBtn: { backgroundColor: colors.brand, borderRadius: radius.md, paddingHorizontal: spacing.xl, paddingVertical: spacing.md, marginTop: spacing.xl },
   createBtnText: { color: "#fff", fontWeight: "700", fontSize: font.size.lg },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

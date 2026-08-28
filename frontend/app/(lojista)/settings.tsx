@@ -1,13 +1,14 @@
 import { useCallback, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, TextInput,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
-import { colors, spacing, radius, font } from "@/src/theme";
+import { colors, spacing, radius, font, registerThemedStyles } from "@/src/theme";
+import { useTheme } from "@/src/theme-context";
 import { api } from "@/src/lib/api";
 import { useAuth } from "@/src/auth/AuthContext";
 import ImageUpload from "@/src/components/ImageUpload";
@@ -21,6 +22,7 @@ const STORE_STATUS = [
 
 export default function Settings() {
   const { signOut } = useAuth();
+  const { isDark, toggle } = useTheme();
   const [store, setStore] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -245,6 +247,24 @@ export default function Settings() {
             {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>{store ? "Salvar alterações" : "Criar loja"}</Text>}
           </Pressable>
 
+          <Text style={styles.section}>Preferências</Text>
+          <View style={styles.prefRow}>
+            <View style={styles.prefLeft}>
+              <Ionicons name={isDark ? "moon" : "moon-outline"} size={20} color={colors.brand} />
+              <View>
+                <Text style={styles.prefTitle}>Modo noturno</Text>
+                <Text style={styles.prefSub}>Tema escuro para ambientes com pouca luz</Text>
+              </View>
+            </View>
+            <Switch
+              testID="dark-mode-switch"
+              value={isDark}
+              onValueChange={toggle}
+              trackColor={{ false: colors.borderStrong, true: colors.brand }}
+              thumbColor="#fff"
+            />
+          </View>
+
           <Pressable testID="settings-logout" style={styles.logout} onPress={signOut}>
             <Ionicons name="log-out-outline" size={20} color={colors.error} />
             <Text style={styles.logoutText}>Sair da conta</Text>
@@ -264,7 +284,7 @@ function Field({ label, value, onChange, keyboardType, testID }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   header: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
   title: { fontSize: font.size.xxl, fontWeight: "800", color: colors.onSurface },
@@ -290,8 +310,14 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, color: colors.onSurface, backgroundColor: colors.surfaceSecondary, fontSize: font.size.lg },
   saveBtn: { backgroundColor: colors.brand, borderRadius: radius.md, paddingVertical: spacing.lg, alignItems: "center", marginTop: spacing.md },
   saveText: { color: "#fff", fontWeight: "800", fontSize: font.size.lg },
+  prefRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.lg, borderWidth: 1, borderColor: colors.border },
+  prefLeft: { flexDirection: "row", alignItems: "center", gap: spacing.md, flex: 1, paddingRight: spacing.md },
+  prefTitle: { color: colors.onSurface, fontWeight: "700", fontSize: font.size.lg },
+  prefSub: { color: colors.onSurfaceSecondary, fontSize: font.size.sm, marginTop: 2 },
   switchBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: spacing.xl, paddingVertical: spacing.md, borderRadius: radius.md, backgroundColor: colors.brandTertiary },
   switchText: { color: colors.brand, fontWeight: "700", fontSize: font.size.lg },
   logout: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: spacing.md, paddingVertical: spacing.md },
   logoutText: { color: colors.error, fontWeight: "700", fontSize: font.size.lg },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

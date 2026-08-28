@@ -8,13 +8,14 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { AuthProvider, useAuth } from "@/src/auth/AuthContext";
 import { CartProvider } from "@/src/store/cart";
-import { colors } from "@/src/theme";
+import { ThemeProvider, useTheme } from "@/src/theme-context";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
 
 function Gate() {
   const { user, loading } = useAuth();
+  const { colors } = useTheme();
   const segments = useSegments();
   const router = useRouter();
 
@@ -46,7 +47,7 @@ function Gate() {
 
   if (loading) {
     return (
-      <View style={styles.center} testID="app-loading">
+      <View style={[styles.center, { backgroundColor: colors.surface }]} testID="app-loading">
         <ActivityIndicator color={colors.brand} size="large" />
       </View>
     );
@@ -66,16 +67,18 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AuthProvider>
-          <CartProvider>
-            <Gate />
-          </CartProvider>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <CartProvider>
+              <Gate />
+            </CartProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
 });

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Refre
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, radius, font, brl } from "@/src/theme";
+import { colors, spacing, radius, font, brl, registerThemedStyles } from "@/src/theme";
 import { api } from "@/src/lib/api";
 
 function todayISO() {
@@ -102,7 +102,7 @@ export default function Finance() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
   headerTitle: { fontSize: font.size.lg, fontWeight: "700", color: colors.onSurface },
@@ -122,3 +122,5 @@ const styles = StyleSheet.create({
   dateBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
   dateLabel: { fontSize: font.size.lg, fontWeight: "800", color: colors.onSurface },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

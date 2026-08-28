@@ -1,4 +1,4 @@
-export const colors = {
+export const lightColors = {
   surface: '#FFFFFF',
   onSurface: '#1A1817',
   surfaceSecondary: '#F8F8F6',
@@ -22,6 +22,56 @@ export const colors = {
   borderStrong: '#D6D6D6',
   divider: '#F0F0F0',
 };
+
+export const darkColors: typeof lightColors = {
+  surface: '#121212',
+  onSurface: '#F5F5F3',
+  surfaceSecondary: '#1E1E1E',
+  onSurfaceSecondary: '#B5B5B0',
+  surfaceTertiary: '#2A2A2A',
+  onSurfaceTertiary: '#8C8C88',
+  surfaceInverse: '#F5F5F3',
+  onSurfaceInverse: '#121212',
+  brand: '#FF6A1A',
+  brandPrimary: '#FF6A1A',
+  onBrandPrimary: '#FFFFFF',
+  brandSecondary: '#3A2417',
+  onBrandSecondary: '#FF8A4C',
+  brandTertiary: '#241812',
+  onBrandTertiary: '#FF7A33',
+  success: '#33B85B',
+  warning: '#FFC533',
+  error: '#F0556B',
+  info: '#3AB6C9',
+  border: '#2E2E2E',
+  borderStrong: '#3E3E3E',
+  divider: '#242424',
+};
+
+export type Colors = typeof lightColors;
+
+// Live-binding active palette. Reassigned by applyPalette() on theme change.
+// Because this is an ES module `let` export, all importers read the current
+// value at access time (e.g. inside JSX render), so inline `colors.x` usages
+// automatically reflect the active theme after a re-render.
+export let colors: Colors = lightColors;
+
+// Registry of StyleSheet rebuilders. Each screen registers a callback that
+// recreates its module-level `styles` from the current palette.
+type Rebuilder = () => void;
+const _rebuilders = new Set<Rebuilder>();
+
+export function registerThemedStyles(fn: Rebuilder): () => void {
+  _rebuilders.add(fn);
+  return () => _rebuilders.delete(fn);
+}
+
+export function applyPalette(next: Colors) {
+  colors = next;
+  _rebuilders.forEach((fn) => {
+    try { fn(); } catch {}
+  });
+}
 
 export const spacing = {
   xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48,

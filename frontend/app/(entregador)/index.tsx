@@ -9,7 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import * as Clipboard from "expo-clipboard";
 import { useAudioPlayer } from "expo-audio";
-import { colors, spacing, radius, font, brl, STATUS_LABELS, STATUS_COLORS } from "@/src/theme";
+import { colors, spacing, radius, font, brl, STATUS_LABELS, STATUS_COLORS, registerThemedStyles } from "@/src/theme";
 import { api } from "@/src/lib/api";
 import { useAuth } from "@/src/auth/AuthContext";
 import LiveMap from "@/src/components/LiveMap";
@@ -512,7 +512,7 @@ function BalRow({ label, icon, data, highlight }: { label: string; icon: any; da
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.divider },
   logo: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: colors.brand, alignItems: "center", justifyContent: "center" },
@@ -617,3 +617,5 @@ const styles = StyleSheet.create({
   storeBreakCount: { color: colors.onSurfaceTertiary, fontSize: font.size.sm, width: 34, textAlign: "right" },
   storeBreakTotal: { color: colors.onSurface, fontWeight: "700", fontSize: font.size.sm, width: 72, textAlign: "right" },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

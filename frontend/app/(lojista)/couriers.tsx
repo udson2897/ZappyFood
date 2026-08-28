@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, radius, font } from "@/src/theme";
+import { colors, spacing, radius, font, registerThemedStyles } from "@/src/theme";
 import { api } from "@/src/lib/api";
 
 export default function Couriers() {
@@ -139,7 +139,7 @@ export default function Couriers() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
   headerTitle: { fontSize: font.size.lg, fontWeight: "700", color: colors.onSurface },
@@ -170,3 +170,5 @@ const styles = StyleSheet.create({
   removeConfirmBtn: { flex: 1, backgroundColor: colors.error, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: "center" },
   removeConfirmText: { color: "#fff", fontWeight: "800" },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

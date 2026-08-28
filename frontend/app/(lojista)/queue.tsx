@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Refre
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, radius, font, brl, STATUS_LABELS, STATUS_COLORS } from "@/src/theme";
+import { colors, spacing, radius, font, brl, STATUS_LABELS, STATUS_COLORS, registerThemedStyles } from "@/src/theme";
 import { api } from "@/src/lib/api";
 
 const NEXT_ACTION: Record<string, { status: string; label: string } | null> = {
@@ -174,7 +174,7 @@ export default function Queue() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   header: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   title: { fontSize: font.size.xxl, fontWeight: "800", color: colors.onSurface },
@@ -215,3 +215,5 @@ const styles = StyleSheet.create({
   reloadBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.lg, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.brand },
   reloadText: { color: colors.brand, fontWeight: "700" },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

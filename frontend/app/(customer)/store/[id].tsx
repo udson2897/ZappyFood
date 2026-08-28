@@ -6,7 +6,7 @@ import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, radius, font, brl } from "@/src/theme";
+import { colors, spacing, radius, font, brl, registerThemedStyles } from "@/src/theme";
 import { api } from "@/src/lib/api";
 import { useCart } from "@/src/store/cart";
 
@@ -268,7 +268,7 @@ function ProductCustomizer({ product, onClose, onAdd }: { product: any; onClose:
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   banner: { width: "100%", height: 200, backgroundColor: colors.surfaceTertiary },
   overlayBar: { position: "absolute", left: 0, right: 0, top: 0, paddingHorizontal: spacing.md },
@@ -331,3 +331,5 @@ const styles = StyleSheet.create({
   addBtn: { backgroundColor: colors.brand, borderRadius: radius.md, paddingVertical: spacing.lg, alignItems: "center", marginTop: spacing.sm },
   addText: { color: "#fff", fontWeight: "800", fontSize: font.size.lg },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

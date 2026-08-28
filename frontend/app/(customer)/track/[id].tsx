@@ -3,10 +3,8 @@ import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Anima
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  colors, spacing, radius, font, brl, ORDER_FLOW, STATUS_LABELS,
-  STATUS_COLORS, STATUS_DESC, STATUS_ICONS,
-} from "@/src/theme";
+import { colors, spacing, radius, font, brl, ORDER_FLOW, STATUS_LABELS,
+  STATUS_COLORS, STATUS_DESC, STATUS_ICONS, registerThemedStyles } from "@/src/theme";
 import { api } from "@/src/lib/api";
 import LiveMap from "@/src/components/LiveMap";
 
@@ -289,7 +287,7 @@ function Row({ label, value, bold }: { label: string; value: string; bold?: bool
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   header: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
@@ -349,3 +347,5 @@ const styles = StyleSheet.create({
   ratingBox: { marginTop: spacing.xl, backgroundColor: colors.brandTertiary, borderRadius: radius.md, padding: spacing.lg },
   ratingTitle: { textAlign: "center", fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

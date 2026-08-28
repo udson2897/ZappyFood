@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
-import { colors, spacing, radius, font, brl, STATUS_LABELS } from "@/src/theme";
+import { colors, spacing, radius, font, brl, STATUS_LABELS, registerThemedStyles } from "@/src/theme";
 import LiveMap from "@/src/components/LiveMap";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
@@ -360,7 +360,7 @@ function BalRow({ label, icon, data, highlight }: { label: string; icon: any; da
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.divider },
   logo: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: colors.brand, alignItems: "center", justifyContent: "center" },
@@ -417,3 +417,5 @@ const styles = StyleSheet.create({
   histSub: { color: colors.onSurfaceSecondary, fontSize: font.size.sm, marginTop: 1 },
   histFee: { fontWeight: "800", color: colors.onSurface, fontSize: font.size.lg },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

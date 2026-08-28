@@ -5,7 +5,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, radius, font, brl } from "@/src/theme";
+import { colors, spacing, radius, font, brl, registerThemedStyles } from "@/src/theme";
 import { useCart } from "@/src/store/cart";
 import { api } from "@/src/lib/api";
 import { useAuth } from "@/src/auth/AuthContext";
@@ -281,7 +281,7 @@ function SumRow({ label, value, bold }: { label: string; value: string; bold?: b
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
   headerTitle: { fontSize: font.size.lg, fontWeight: "700", color: colors.onSurface },
@@ -327,3 +327,5 @@ const styles = StyleSheet.create({
   emptyBtn: { marginTop: spacing.xl, backgroundColor: colors.brand, borderRadius: radius.md, paddingHorizontal: spacing.xl, paddingVertical: spacing.md },
   emptyBtnText: { color: "#fff", fontWeight: "700" },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

@@ -5,7 +5,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, radius, font } from "@/src/theme";
+import { colors, spacing, radius, font, registerThemedStyles } from "@/src/theme";
 import { api } from "@/src/lib/api";
 import { useAuth } from "@/src/auth/AuthContext";
 
@@ -95,7 +95,7 @@ export default function ChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   header: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
@@ -119,3 +119,5 @@ const styles = StyleSheet.create({
   },
   sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brand, alignItems: "center", justifyContent: "center" },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

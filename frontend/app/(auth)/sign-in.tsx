@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link } from "expo-router";
-import { colors, spacing, radius, font } from "@/src/theme";
+import { colors, spacing, radius, font, registerThemedStyles } from "@/src/theme";
 import { useAuth } from "@/src/auth/AuthContext";
 
 export default function SignIn() {
@@ -89,7 +89,7 @@ export default function SignIn() {
             <View style={styles.logo}>
               <Text style={styles.logoText}>Z</Text>
             </View>
-            <Text style={styles.title}>ZappyFood</Text>
+            <Text style={styles.title}>Pratô</Text>
             <Text style={styles.subtitle}>
               {mode === "entregador" ? "Área do entregador" : "Delivery direto do lojista para você"}
             </Text>
@@ -211,7 +211,7 @@ export default function SignIn() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   scroll: { flexGrow: 1, padding: spacing.xl, justifyContent: "center" },
   brandBox: { alignItems: "center", marginBottom: spacing.xl },
@@ -258,3 +258,5 @@ const styles = StyleSheet.create({
   linkRow: { alignItems: "center", marginTop: spacing.lg },
   linkText: { color: colors.onSurfaceSecondary },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

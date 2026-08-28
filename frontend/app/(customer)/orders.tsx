@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
-import { colors, spacing, radius, font, brl, STATUS_LABELS, STATUS_COLORS } from "@/src/theme";
+import { colors, spacing, radius, font, brl, STATUS_LABELS, STATUS_COLORS, registerThemedStyles } from "@/src/theme";
 import { api } from "@/src/lib/api";
 
 export default function Orders() {
@@ -70,7 +70,7 @@ export default function Orders() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   header: { padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.divider },
   title: { fontSize: font.size.xxl, fontWeight: "800", color: colors.onSurface },
@@ -91,3 +91,5 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: font.size.lg, fontWeight: "700", color: colors.onSurface },
   emptySub: { color: colors.onSurfaceSecondary, marginTop: 4, textAlign: "center" },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

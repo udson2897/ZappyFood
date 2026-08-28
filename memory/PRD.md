@@ -128,6 +128,8 @@ Plataforma SaaS de delivery por assinatura (ZappyFood) para pequenos e médios n
 - [x] Pedidos: fluxo completo AGUARDANDO_CONFIRMACAO → ACEITO → EM_PREPARO → SAIU_PARA_ENTREGA → FINALIZADO / CANCELADO
 - [x] Cupons (backend: percentual/fixo/frete grátis aplicado no pedido)
 - [x] Testado E2E (27/27 backend pytest + frontend flows)
+- [x] Rebrand ZappyFood → Pratô (textos/app.json)
+- [x] Modo Noturno (Dark Mode): tema claro/escuro global com persistência (AsyncStorage/SecureStore), toggle no perfil do cliente e nas configurações do lojista. Implementado via live-binding `colors` + registry de StyleSheets (`registerThemedStyles`/`applyPalette`) e `ThemeProvider`/`useTheme` — aplica em todas as telas (25 arquivos migrados para `makeStyles`)
 
 ## Backlog (prioritized)
 ### P0

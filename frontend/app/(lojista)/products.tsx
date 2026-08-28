@@ -7,7 +7,7 @@ import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, radius, font, brl } from "@/src/theme";
+import { colors, spacing, radius, font, brl, registerThemedStyles } from "@/src/theme";
 import { api } from "@/src/lib/api";
 import ImageUpload from "@/src/components/ImageUpload";
 
@@ -298,7 +298,7 @@ function Field({ label, value, onChange, keyboardType, testID }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   header: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
   title: { fontSize: font.size.xxl, fontWeight: "800", color: colors.onSurface },
@@ -336,3 +336,5 @@ const styles = StyleSheet.create({
   saveBtn: { backgroundColor: colors.brand, borderRadius: radius.md, paddingVertical: spacing.lg, alignItems: "center", marginTop: spacing.md, marginBottom: spacing.xl },
   saveText: { color: "#fff", fontWeight: "800", fontSize: font.size.lg },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

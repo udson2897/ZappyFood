@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link } from "expo-router";
-import { colors, spacing, radius, font } from "@/src/theme";
+import { colors, spacing, radius, font, registerThemedStyles } from "@/src/theme";
 import { useAuth } from "@/src/auth/AuthContext";
 import { Role } from "@/src/lib/api";
 
@@ -36,7 +36,7 @@ export default function SignUp() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Text style={styles.title}>Criar conta</Text>
-          <Text style={styles.subtitle}>Comece agora no ZappyFood</Text>
+          <Text style={styles.subtitle}>Comece agora no Pratô</Text>
 
           <Text style={styles.label}>Nome completo</Text>
           <TextInput testID="signup-name" style={styles.input} value={name} onChangeText={setName} />
@@ -93,7 +93,7 @@ export default function SignUp() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   scroll: { padding: spacing.xl, paddingBottom: spacing.xxxl },
   title: { fontSize: font.size.xxl, fontWeight: "800", color: colors.onSurface, marginTop: spacing.md },
@@ -121,3 +121,5 @@ const styles = StyleSheet.create({
   linkRow: { alignItems: "center", marginTop: spacing.lg },
   linkText: { color: colors.onSurfaceSecondary },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

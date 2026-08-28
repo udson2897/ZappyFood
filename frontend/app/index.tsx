@@ -1,5 +1,5 @@
 import { View, ActivityIndicator, StyleSheet } from "react-native";
-import { colors } from "@/src/theme";
+import { colors, registerThemedStyles } from "@/src/theme";
 
 export default function Index() {
   return (
@@ -9,7 +9,7 @@ export default function Index() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.surface,
@@ -17,3 +17,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

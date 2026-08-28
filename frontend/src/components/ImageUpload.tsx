@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet, ActivityIndicator, Alert, Linking } 
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, radius, font } from "@/src/theme";
+import { colors, spacing, radius, font, registerThemedStyles } from "@/src/theme";
 import { uploadImage } from "@/src/lib/api";
 
 type Props = {
@@ -103,7 +103,7 @@ export default function ImageUpload({ label, value, onChange, aspect, height = 1
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   wrap: { marginBottom: spacing.md },
   label: { color: colors.onSurfaceSecondary, fontWeight: "600", marginBottom: spacing.xs, fontSize: font.size.sm },
   previewWrap: { gap: spacing.sm },
@@ -117,3 +117,5 @@ const styles = StyleSheet.create({
   dropText: { color: colors.brand, fontWeight: "800", fontSize: font.size.lg, marginTop: spacing.xs },
   dropHint: { color: colors.onSurfaceSecondary, fontSize: font.size.sm },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });

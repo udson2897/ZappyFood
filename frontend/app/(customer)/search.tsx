@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, radius, font, brl } from "@/src/theme";
+import { colors, spacing, radius, font, brl, registerThemedStyles } from "@/src/theme";
 import { api } from "@/src/lib/api";
 
 export default function Search() {
@@ -70,7 +70,7 @@ export default function Search() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surface },
   header: { padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.divider },
   searchBox: {
@@ -88,3 +88,5 @@ const styles = StyleSheet.create({
   rowTitle: { fontSize: font.size.lg, fontWeight: "700", color: colors.onSurface },
   rowMeta: { fontSize: font.size.sm, color: colors.onSurfaceSecondary, marginTop: 2 },
 });
+let styles = makeStyles();
+registerThemedStyles(() => { styles = makeStyles(); });
