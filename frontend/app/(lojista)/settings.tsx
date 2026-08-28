@@ -28,6 +28,7 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     fantasy_name: "", category: "", description: "", phone: "",
+    cnpj: "", pix_key: "",
     delivery_fee: "", est_delivery_min: "", banner_url: "", logo_url: "",
     base_delivery_fee: "", price_per_km: "", max_radius_km: "", free_above: "",
     lat: null as number | null, lng: null as number | null,
@@ -46,6 +47,8 @@ export default function Settings() {
           category: s.category || "",
           description: s.description || "",
           phone: s.phone || "",
+          cnpj: s.cnpj || "",
+          pix_key: s.pix_key || "",
           delivery_fee: String(s.delivery_fee ?? ""),
           est_delivery_min: String(s.est_delivery_min ?? ""),
           banner_url: s.banner_url || "",
@@ -94,6 +97,8 @@ export default function Settings() {
         category: form.category,
         description: form.description,
         phone: form.phone,
+        cnpj: form.cnpj,
+        pix_key: form.pix_key,
         delivery_fee: base,
         est_delivery_min: parseInt(form.est_delivery_min) || 30,
         min_order: 0,
@@ -157,6 +162,8 @@ export default function Settings() {
           <Text style={styles.section}>Dados da loja</Text>
           <Field label="Nome fantasia" value={form.fantasy_name} onChange={(t: string) => setForm({ ...form, fantasy_name: t })} testID="store-name" />
           <Field label="Categoria" value={form.category} onChange={(t: string) => setForm({ ...form, category: t })} testID="store-category" />
+          <Field label="CNPJ" value={form.cnpj} onChange={(t: string) => setForm({ ...form, cnpj: t })} testID="store-cnpj" keyboardType="number-pad" />
+          <Field label="Chave Pix (para receber pagamentos)" value={form.pix_key} onChange={(t: string) => setForm({ ...form, pix_key: t })} testID="store-pix" />
           <Field label="Descrição" value={form.description} onChange={(t: string) => setForm({ ...form, description: t })} testID="store-desc" />
           <Field label="Telefone / WhatsApp" value={form.phone} onChange={(t: string) => setForm({ ...form, phone: t })} testID="store-phone" keyboardType="phone-pad" />
           <Field label="Tempo estimado base (min)" value={form.est_delivery_min} onChange={(t: string) => setForm({ ...form, est_delivery_min: t })} testID="store-time" keyboardType="number-pad" />
