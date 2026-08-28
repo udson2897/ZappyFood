@@ -152,7 +152,7 @@ export default function Entregador() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <View style={styles.logo}><Text style={styles.logoText}>Z</Text></View>
+        <View style={styles.logo}><Ionicons name="restaurant" size={24} color="#fff" /></View>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>ZappyFood Entregas</Text>
           <Text style={styles.subtitle}>Área do entregador</Text>

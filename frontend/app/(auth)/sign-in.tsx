@@ -5,6 +5,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, font, registerThemedStyles } from "@/src/theme";
 import { useAuth } from "@/src/auth/AuthContext";
 
@@ -87,7 +88,7 @@ export default function SignIn() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.brandBox}>
             <View style={styles.logo}>
-              <Text style={styles.logoText}>Z</Text>
+              <Ionicons name="restaurant" size={40} color="#fff" />
             </View>
             <Text style={styles.title}>Pratô</Text>
             <Text style={styles.subtitle}>
