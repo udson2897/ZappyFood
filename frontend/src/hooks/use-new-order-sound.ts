@@ -8,7 +8,7 @@ const beepSound = require("../../assets/sounds/beep.wav");
 /**
  * Polls the store's orders while the screen is focused and plays a beep
  * whenever a brand-new order (status AGUARDANDO_CONFIRMACAO) arrives.
- * Returns the latest orders list + a manual reload so screens can reuse the data.
+ * Also tracks the ids of new orders so the UI can highlight them.
  */
 export function useNewOrderSound(intervalMs = 10000) {
   const player = useAudioPlayer(beepSound);
@@ -16,6 +16,7 @@ export function useNewOrderSound(intervalMs = 10000) {
   const primed = useRef(false);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [newIds, setNewIds] = useState<string[]>([]);
 
   const poll = useCallback(async () => {
     try {
@@ -24,9 +25,18 @@ export function useNewOrderSound(intervalMs = 10000) {
       const pending = o
         .filter((x: any) => x.status === "AGUARDANDO_CONFIRMACAO")
         .map((x: any) => x.id);
-      if (primed.current && pending.some((id: string) => !seen.current.has(id))) {
+      const fresh = pending.filter((id: string) => !seen.current.has(id));
+      if (primed.current && fresh.length) {
         try { player.seekTo(0); player.play(); } catch {}
       }
+      setNewIds((prev) => {
+        // keep only ids that are still pending, then add fresh ones
+        let next = prev.filter((id) => pending.includes(id));
+        if (primed.current && fresh.length) {
+          next = Array.from(new Set([...next, ...fresh]));
+        }
+        return next;
+      });
       seen.current = new Set(pending);
       primed.current = true;
     } catch {
@@ -34,6 +44,12 @@ export function useNewOrderSound(intervalMs = 10000) {
       setLoading(false);
     }
   }, [player]);
+
+  const clearNew = useCallback((id: string) => {
+    setNewIds((prev) => prev.filter((x) => x !== id));
+  }, []);
+
+  const clearAllNew = useCallback(() => setNewIds([]), []);
 
   useFocusEffect(
     useCallback(() => {
@@ -43,5 +59,5 @@ export function useNewOrderSound(intervalMs = 10000) {
     }, [poll, intervalMs])
   );
 
-  return { orders, loading, reload: poll };
+  return { orders, loading, reload: poll, newIds, newCount: newIds.length, clearNew, clearAllNew };
 }

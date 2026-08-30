@@ -20,7 +20,7 @@ const FILTERS = ["ATIVOS", "AGUARDANDO_CONFIRMACAO", "EM_PREPARO", "FINALIZADO"]
 
 export default function Queue() {
   const router = useRouter();
-  const { orders, loading, reload } = useNewOrderSound(10000);
+  const { orders, loading, reload, newIds, newCount, clearNew, clearAllNew } = useNewOrderSound(10000);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState("ATIVOS");
 
@@ -32,6 +32,7 @@ export default function Queue() {
   const advance = async (order: any) => {
     const next = NEXT_ACTION[order.status];
     if (!next) return;
+    clearNew(order.id);
     await api.updateOrderStatus(order.id, next.status);
     load();
   };
@@ -52,6 +53,20 @@ export default function Queue() {
       <View style={styles.header}>
         <Text style={styles.title}>Fila de Pedidos</Text>
       </View>
+
+      {newCount > 0 && (
+        <Pressable
+          testID="queue-new-banner"
+          style={styles.newBanner}
+          onPress={() => { setFilter("AGUARDANDO_CONFIRMACAO"); clearAllNew(); }}
+        >
+          <Ionicons name="notifications" size={18} color="#fff" />
+          <Text style={styles.newBannerText}>
+            {newCount} novo{newCount !== 1 ? "s" : ""} pedido{newCount !== 1 ? "s" : ""}!
+          </Text>
+          <Text style={styles.newBannerCta}>Ver</Text>
+        </Pressable>
+      )}
 
       <View style={styles.chipsWrap}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
@@ -97,11 +112,19 @@ export default function Queue() {
             const next = NEXT_ACTION[o.status];
             const refused = o.courier_refused && !o.courier;
             const active = ["AGUARDANDO_CONFIRMACAO", "ACEITO", "EM_PREPARO", "SAIU_PARA_ENTREGA"].includes(o.status);
+            const isNew = newIds.includes(o.id);
             return (
-              <View key={o.id} style={[styles.card, refused && active && styles.cardRefused]} testID={`queue-order-${o.id}`}>
-                <Pressable onPress={() => router.push(`/(lojista)/order/${o.id}`)}>
+              <View key={o.id} style={[styles.card, refused && active && styles.cardRefused, isNew && styles.cardNew]} testID={`queue-order-${o.id}`}>
+                <Pressable onPress={() => { clearNew(o.id); router.push(`/(lojista)/order/${o.id}`); }}>
                   <View style={styles.cardTop}>
-                    <Text style={styles.customer}>{o.customer_name}{o.code ? ` • #${o.code}` : ""}</Text>
+                    <View style={styles.customerWrap}>
+                      {isNew && (
+                        <View style={styles.newBadge} testID={`queue-new-badge-${o.id}`}>
+                          <Text style={styles.newBadgeText}>NOVO</Text>
+                        </View>
+                      )}
+                      <Text style={styles.customer} numberOfLines={1}>{o.customer_name}{o.code ? ` • #${o.code}` : ""}</Text>
+                    </View>
                     <View style={[styles.pill, { backgroundColor: (STATUS_COLORS[o.status] || colors.info) + "22" }]}>
                       <Text style={[styles.pillText, { color: STATUS_COLORS[o.status] || colors.info }]}>{STATUS_LABELS[o.status]}</Text>
                     </View>
@@ -151,7 +174,7 @@ export default function Queue() {
                       <Pressable
                         testID={`queue-reject-${o.id}`}
                         style={styles.rejectBtn}
-                        onPress={async () => { await api.updateOrderStatus(o.id, "CANCELADO"); load(); }}
+                        onPress={async () => { clearNew(o.id); await api.updateOrderStatus(o.id, "CANCELADO"); load(); }}
                       >
                         <Ionicons name="close" size={20} color={colors.error} />
                       </Pressable>
@@ -182,8 +205,15 @@ const makeStyles = () => StyleSheet.create({
   chipText: { color: colors.onSurface, fontWeight: "600", fontSize: font.size.sm },
   chipTextActive: { color: "#fff" },
   card: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginBottom: spacing.md },
+  cardNew: { borderColor: colors.brand, borderWidth: 1.5, backgroundColor: colors.brandTertiary },
   cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  customer: { fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg, flex: 1 },
+  customerWrap: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1, paddingRight: spacing.sm },
+  customer: { fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg, flexShrink: 1 },
+  newBadge: { backgroundColor: colors.brand, borderRadius: radius.sm, paddingHorizontal: 6, paddingVertical: 2 },
+  newBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
+  newBanner: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.brand, marginHorizontal: spacing.lg, marginBottom: spacing.sm, borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  newBannerText: { color: "#fff", fontWeight: "800", fontSize: font.size.lg, flex: 1 },
+  newBannerCta: { color: "#fff", fontWeight: "700", fontSize: font.size.sm, textDecorationLine: "underline" },
   pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill },
   pillText: { fontWeight: "700", fontSize: font.size.sm },
   storeRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
