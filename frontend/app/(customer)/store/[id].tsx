@@ -18,15 +18,37 @@ export default function StoreDetail() {
   const [loading, setLoading] = useState(true);
   const [warn, setWarn] = useState(false);
   const [customizing, setCustomizing] = useState<any | null>(null);
+  const [favIds, setFavIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     (async () => {
       try {
         const s = await api.storeDetail(id as string);
         setStore(s);
+        try {
+          const f = await api.favoriteIds();
+          setFavIds(new Set(f.ids));
+        } catch {}
       } finally { setLoading(false); }
     })();
   }, [id]);
+
+  const toggleFav = async (pid: string) => {
+    setFavIds((prev) => {
+      const n = new Set(prev);
+      if (n.has(pid)) n.delete(pid); else n.add(pid);
+      return n;
+    });
+    try {
+      await api.toggleFavorite(pid);
+    } catch {
+      setFavIds((prev) => {
+        const n = new Set(prev);
+        if (n.has(pid)) n.delete(pid); else n.add(pid);
+        return n;
+      });
+    }
+  };
 
   if (loading || !store) {
     return (
@@ -109,6 +131,18 @@ export default function StoreDetail() {
                   </View>
                   <View style={styles.productImgWrap}>
                     <Image source={{ uri: p.image_url }} style={styles.productImg} contentFit="cover" />
+                    <Pressable
+                      testID={`fav-${p.id}`}
+                      style={styles.favBtn}
+                      onPress={() => toggleFav(p.id)}
+                      hitSlop={8}
+                    >
+                      <Ionicons
+                        name={favIds.has(p.id) ? "heart" : "heart-outline"}
+                        size={18}
+                        color={favIds.has(p.id) ? colors.error : colors.onSurfaceSecondary}
+                      />
+                    </Pressable>
                     <View style={styles.plusBtn}>
                       <Ionicons name="add" size={18} color="#fff" />
                     </View>
@@ -290,6 +324,7 @@ const makeStyles = () => StyleSheet.create({
   promoTagText: { color: "#fff", fontSize: 10, fontWeight: "800" },
   customTag: { color: colors.onSurfaceTertiary, fontSize: font.size.sm, marginTop: 2 },
   productImgWrap: { position: "relative" },
+  favBtn: { position: "absolute", right: -6, top: -8, width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(255,255,255,0.95)", alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 3 },
   productImg: { width: 100, height: 100, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary },
   plusBtn: { position: "absolute", right: -8, bottom: -8, width: 32, height: 32, borderRadius: 16, backgroundColor: colors.brand, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#fff" },
   cartBanner: {

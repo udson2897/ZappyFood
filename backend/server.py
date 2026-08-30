@@ -460,6 +460,55 @@ async def delete_address(aid: str, user=Depends(current_user)):
     return {"ok": True}
 
 
+# ---------------- Favorites (produtos favoritos do cliente) ----------------
+class FavoriteIn(BaseModel):
+    product_id: str
+
+
+@api.get("/favorites/ids")
+async def favorite_ids(user=Depends(current_user)):
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "favorites": 1})
+    return {"ids": (fresh or {}).get("favorites", [])}
+
+
+@api.get("/favorites")
+async def list_favorites(user=Depends(current_user)):
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "favorites": 1})
+    ids = (fresh or {}).get("favorites", [])
+    if not ids:
+        return []
+    products = await db.products.find({"id": {"$in": ids}}, {"_id": 0}).to_list(500)
+    # attach store info; keep only products that still exist, ordered by favorite order
+    store_ids = list({p["store_id"] for p in products})
+    stores = await db.stores.find({"id": {"$in": store_ids}}, {"_id": 0, "id": 1, "fantasy_name": 1}).to_list(500)
+    store_map = {s["id"]: s.get("fantasy_name", "Loja") for s in stores}
+    by_id = {p["id"]: p for p in products}
+    result = []
+    for pid in ids:
+        p = by_id.get(pid)
+        if not p:
+            continue
+        result.append({**p, "store_name": store_map.get(p["store_id"], "Loja")})
+    return result
+
+
+@api.post("/favorites/toggle")
+async def toggle_favorite(data: FavoriteIn, user=Depends(current_user)):
+    product = await db.products.find_one({"id": data.product_id}, {"_id": 0, "id": 1})
+    if not product:
+        raise HTTPException(404, "Produto não encontrado")
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "favorites": 1})
+    favs = (fresh or {}).get("favorites", [])
+    if data.product_id in favs:
+        favs = [f for f in favs if f != data.product_id]
+        favorited = False
+    else:
+        favs = favs + [data.product_id]
+        favorited = True
+    await db.users.update_one({"id": user["id"]}, {"$set": {"favorites": favs}})
+    return {"favorited": favorited, "count": len(favs)}
+
+
 class QuoteIn(BaseModel):
     store_id: str
     address_id: Optional[str] = None

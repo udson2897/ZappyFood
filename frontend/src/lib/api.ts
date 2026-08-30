@@ -144,6 +144,14 @@ export const api = {
     apiFetch<any>(`/addresses/${id}`, { method: 'DELETE' }),
   // loyalty
   loyalty: () => apiFetch<{ points: number; value_brl: number; rate: string }>('/loyalty'),
+  // favorites
+  favoriteIds: () => apiFetch<{ ids: string[] }>('/favorites/ids'),
+  favorites: () => apiFetch<any[]>('/favorites'),
+  toggleFavorite: (product_id: string) =>
+    apiFetch<{ favorited: boolean; count: number }>('/favorites/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ product_id }),
+    }),
   // delivery fee by distance
   deliveryQuote: (store_id: string, address_id?: string, subtotal = 0, lat?: number, lng?: number) =>
     apiFetch<{ distance_km: number | null; fee: number; deliverable: boolean; eta_min: number; reason: string | null; max_radius_km: number }>(

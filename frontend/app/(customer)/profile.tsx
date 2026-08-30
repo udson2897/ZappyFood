@@ -33,7 +33,7 @@ export default function Profile() {
         <View style={styles.rows}>
           <Row icon="location-outline" label="Meus endereços" onPress={() => router.push("/(customer)/addresses")} />
           <Row icon="receipt-outline" label="Meus pedidos" onPress={() => router.push("/(customer)/orders")} />
-          <Row icon="heart-outline" label="Favoritos" />
+          <Row icon="heart-outline" label="Favoritos" onPress={() => router.push("/(customer)/favorites")} />
           <Row icon="help-circle-outline" label="Ajuda" />
         </View>
 

@@ -61,6 +61,7 @@ export default function CustomerLayout() {
       <Tabs.Screen name="chat/[id]" options={{ href: null }} />
       <Tabs.Screen name="addresses" options={{ href: null }} />
       <Tabs.Screen name="notifications" options={{ href: null }} />
+      <Tabs.Screen name="favorites" options={{ href: null }} />
     </Tabs>
   );
 }
