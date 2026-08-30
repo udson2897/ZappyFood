@@ -5,12 +5,14 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, font, brl, registerThemedStyles } from "@/src/theme";
 import { api } from "@/src/lib/api";
+import { useNewOrderSound } from "@/src/hooks/use-new-order-sound";
 
 export default function Dashboard() {
   const router = useRouter();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  useNewOrderSound(12000);
 
   const load = useCallback(async () => {
     try {

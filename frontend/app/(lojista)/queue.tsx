@@ -1,10 +1,11 @@
 import { useCallback, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, font, brl, STATUS_LABELS, STATUS_COLORS, registerThemedStyles } from "@/src/theme";
 import { api } from "@/src/lib/api";
+import { useNewOrderSound } from "@/src/hooks/use-new-order-sound";
 
 const NEXT_ACTION: Record<string, { status: string; label: string } | null> = {
   AGUARDANDO_CONFIRMACAO: { status: "ACEITO", label: "Aceitar pedido" },
@@ -19,22 +20,14 @@ const FILTERS = ["ATIVOS", "AGUARDANDO_CONFIRMACAO", "EM_PREPARO", "FINALIZADO"]
 
 export default function Queue() {
   const router = useRouter();
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { orders, loading, reload } = useNewOrderSound(10000);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState("ATIVOS");
 
   const load = useCallback(async () => {
-    try {
-      const o = await api.storeOrders();
-      setOrders(o);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+    await reload();
+    setRefreshing(false);
+  }, [reload]);
 
   const advance = async (order: any) => {
     const next = NEXT_ACTION[order.status];
@@ -94,7 +87,7 @@ export default function Queue() {
                 Você tem {orders.length} pedido{orders.length !== 1 ? "s" : ""} no total. Toque em Finalizado para ver os concluídos.
               </Text>
             )}
-            <Pressable style={styles.reloadBtn} onPress={() => { setLoading(true); load(); }} testID="queue-reload">
+            <Pressable style={styles.reloadBtn} onPress={() => { load(); }} testID="queue-reload">
               <Ionicons name="refresh" size={16} color={colors.brand} />
               <Text style={styles.reloadText}>Atualizar</Text>
             </Pressable>
