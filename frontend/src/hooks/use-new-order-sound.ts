@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect } from "expo-router";
-import { useAudioPlayer } from "expo-audio";
+import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
 import { api } from "@/src/lib/api";
 
-const beepSound = require("../../assets/sounds/beep.wav");
+const beepSound = require("../../assets/sounds/new-order.wav");
 
 /**
  * Polls the store's orders while the screen is focused and plays a beep
@@ -20,8 +20,27 @@ export function useNewOrderSound(intervalMs = 10000, repeatMs = 4000) {
   const [newIds, setNewIds] = useState<string[]>([]);
   const [focused, setFocused] = useState(false);
 
+  // Ensure the alert is loud and audible even with the iPhone on silent mode.
+  useEffect(() => {
+    setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+      interruptionMode: "duckOthers",
+      allowsRecording: false,
+    }).catch(() => {});
+    try {
+      player.volume = 1.0;
+      player.muted = false;
+    } catch {}
+  }, [player]);
+
   const playBeep = useCallback(() => {
-    try { player.seekTo(0); player.play(); } catch {}
+    try {
+      player.volume = 1.0;
+      player.muted = false;
+      player.seekTo(0);
+      player.play();
+    } catch {}
   }, [player]);
 
   const poll = useCallback(async () => {
