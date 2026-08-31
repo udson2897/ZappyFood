@@ -16,6 +16,16 @@ function formatTime(iso: string) {
   }
 }
 
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 export default function Track() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -35,7 +45,7 @@ export default function Track() {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 4000);
+    const t = setInterval(load, 3000);
     return () => clearInterval(t);
   }, [load]);
 
@@ -129,7 +139,26 @@ export default function Track() {
 
         {order.status === "SAIU_PARA_ENTREGA" && order.code && order.address?.lat != null && (
           <View style={styles.mapCard} testID="track-live-map">
-            <Text style={styles.mapTitle}>Entregador a caminho 🛵</Text>
+            <View style={styles.mapHeadRow}>
+              <Text style={styles.mapTitle}>Entregador a caminho 🛵</Text>
+              {(() => {
+                const cl = order.courier_location;
+                if (!cl || cl.lat == null) {
+                  return <Text style={styles.liveEtaWait}>aguardando GPS…</Text>;
+                }
+                const distKm = haversineKm(cl.lat, cl.lng, order.address.lat, order.address.lng);
+                const mins = Math.max(1, Math.round(distKm / (22 / 60)));
+                const distStr = distKm < 1
+                  ? `${Math.round(distKm * 1000)} m`
+                  : `${distKm.toFixed(1).replace(".", ",")} km`;
+                return (
+                  <View style={styles.liveEtaPill} testID="track-live-eta">
+                    <Ionicons name="navigate" size={13} color={colors.brand} />
+                    <Text style={styles.liveEtaText}>{distStr} • ~{mins} min</Text>
+                  </View>
+                );
+              })()}
+            </View>
             <LiveMap
               code={order.code}
               dest={{ lat: order.address.lat, lng: order.address.lng }}
@@ -309,7 +338,11 @@ const makeStyles = () => StyleSheet.create({
   storeName: { fontSize: font.size.lg, fontWeight: "700", color: colors.onSurface },
   orderCode: { marginLeft: "auto", color: colors.onSurfaceTertiary, fontWeight: "700" },
   mapCard: { marginBottom: spacing.lg },
-  mapTitle: { fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg, marginBottom: spacing.sm },
+  mapHeadRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.sm },
+  mapTitle: { fontWeight: "700", color: colors.onSurface, fontSize: font.size.lg },
+  liveEtaPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.brandTertiary, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 4 },
+  liveEtaText: { color: colors.brand, fontWeight: "700", fontSize: font.size.sm },
+  liveEtaWait: { color: colors.onSurfaceTertiary, fontSize: font.size.sm, fontStyle: "italic" },
   timeline: { marginVertical: spacing.xs },
   step: { flexDirection: "row", gap: spacing.md },
   stepLeft: { alignItems: "center", width: 24 },

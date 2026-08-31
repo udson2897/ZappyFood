@@ -31,22 +31,40 @@ var courierIcon=L.divIcon({html:'<div style="font-size:26px">🛵</div>',classNa
 if(dest){L.marker(dest,{icon:destIcon}).addTo(map).bindPopup('Cliente');pts.push(dest);}
 if(store){L.marker(store,{icon:storeIcon}).addTo(map).bindPopup('Loja');pts.push(store);}
 if(pts.length){map.fitBounds(pts,{padding:[40,40]});}else{map.setView([-23.55,-46.63],13);}
-var courierMarker=null, line=null;
+var courierMarker=null, line=null, fitted=false, animReq=null;
+function animateTo(marker, from, to, dur){
+  if(animReq){cancelAnimationFrame(animReq);}
+  var start=null;
+  function step(ts){
+    if(!start)start=ts;
+    var t=Math.min(1,(ts-start)/dur);
+    var lat=from[0]+(to[0]-from[0])*t;
+    var lng=from[1]+(to[1]-from[1])*t;
+    marker.setLatLng([lat,lng]);
+    if(dest){
+      if(line){map.removeLayer(line);}
+      line=L.polyline([[lat,lng],dest],{color:'#FF5A00',weight:4,opacity:0.85,dashArray:'6,8'}).addTo(map);
+    }
+    if(t<1){animReq=requestAnimationFrame(step);}
+  }
+  animReq=requestAnimationFrame(step);
+}
 function upd(){
   fetch(API).then(function(r){return r.json();}).then(function(d){
     if(d&&d.lat!=null){
       var c=[d.lat,d.lng];
-      if(!courierMarker){courierMarker=L.marker(c,{icon:courierIcon}).addTo(map).bindPopup('Entregador');}
-      else{courierMarker.setLatLng(c);}
-      if(dest){
-        if(line){map.removeLayer(line);}
-        line=L.polyline([c,dest],{color:'#FF5A00',weight:4,opacity:0.8,dashArray:'6,8'}).addTo(map);
-        map.fitBounds([c,dest],{padding:[50,50]});
+      if(!courierMarker){
+        courierMarker=L.marker(c,{icon:courierIcon}).addTo(map).bindPopup('Entregador');
+        if(dest){line=L.polyline([c,dest],{color:'#FF5A00',weight:4,opacity:0.85,dashArray:'6,8'}).addTo(map);}
+      } else {
+        var from=courierMarker.getLatLng();
+        animateTo(courierMarker,[from.lat,from.lng],c,1600);
       }
+      if(dest && !fitted){map.fitBounds([c,dest],{padding:[50,50]});fitted=true;}
     }
   }).catch(function(){});
 }
-upd(); setInterval(upd, 4000);
+upd(); setInterval(upd, 2000);
 </script></body></html>`;
 }
 

@@ -173,7 +173,7 @@ export default function EntregadorHome() {
         return;
       }
       nativeWatch.current = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, distanceInterval: 15, timeInterval: 5000 },
+        { accuracy: Location.Accuracy.High, distanceInterval: 5, timeInterval: 2000 },
         (pos) => postLocation(pos.coords.latitude, pos.coords.longitude),
       );
     }
