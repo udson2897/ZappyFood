@@ -55,9 +55,20 @@ export default function Dashboard() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.title}>{data.store.fantasy_name}</Text>
           <View style={[styles.statusDot, { backgroundColor: data.store.status === "ABERTA" ? colors.success : colors.error }]} />
+          {data.store.address_text ? (
+            <View style={styles.addrRow}>
+              <Ionicons name="location-outline" size={14} color={colors.onSurfaceSecondary} />
+              <Text style={styles.addrText} numberOfLines={2}>{data.store.address_text}</Text>
+            </View>
+          ) : (
+            <Pressable style={styles.addrRow} onPress={() => router.push("/(lojista)/settings")} testID="dash-add-address">
+              <Ionicons name="location-outline" size={14} color={colors.brand} />
+              <Text style={styles.addrAdd}>Adicionar endereço da loja</Text>
+            </Pressable>
+          )}
         </View>
       </View>
 
@@ -164,6 +175,9 @@ const makeStyles = () => StyleSheet.create({
   },
   title: { fontSize: font.size.xl, fontWeight: "800", color: colors.onSurface },
   statusDot: { width: 8, height: 8, borderRadius: 4, marginTop: 4 },
+  addrRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6, paddingRight: spacing.md },
+  addrText: { flex: 1, color: colors.onSurfaceSecondary, fontSize: font.size.sm },
+  addrAdd: { color: colors.brand, fontSize: font.size.sm, fontWeight: "600" },
   switchBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.brandTertiary, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill },
   switchText: { color: colors.brand, fontWeight: "700", fontSize: font.size.sm },
   metricsRow: { flexDirection: "row", gap: spacing.md, marginBottom: spacing.md },

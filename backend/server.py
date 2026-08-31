@@ -243,6 +243,7 @@ class StoreIn(BaseModel):
     fantasy_name: str
     cnpj: Optional[str] = ""
     pix_key: Optional[str] = ""
+    address_text: Optional[str] = ""
     phone: Optional[str] = ""
     category: str  # e.g., Hamburgueria, Pizzaria
     description: Optional[str] = ""
@@ -1650,6 +1651,7 @@ DEMO_STORES = [
         "logo_url": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200&q=80",
         "delivery_fee": 6.90, "min_order": 20.0, "est_delivery_min": 35, "rating": 4.8,
         "lat": -23.5505, "lng": -46.6333,
+        "address": "Av. Paulista, 1578 - Bela Vista, São Paulo/SP",
         "products": [
             ("X-Burger Clássico", "Pão, hambúrguer 150g, queijo, alface, tomate", 24.90,
              "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&q=80", "Lanches"),
@@ -1669,6 +1671,7 @@ DEMO_STORES = [
         "logo_url": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=200&q=80",
         "delivery_fee": 8.00, "min_order": 30.0, "est_delivery_min": 45, "rating": 4.7,
         "lat": -23.5629, "lng": -46.6544,
+        "address": "Rua Augusta, 2000 - Consolação, São Paulo/SP",
         "products": [
             ("Margherita", "Molho, muçarela, manjericão", 49.90,
              "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=600&q=80", "Pizzas"),
@@ -1686,6 +1689,7 @@ DEMO_STORES = [
         "logo_url": "https://images.unsplash.com/photo-1590301157890-4810ed352733?w=200&q=80",
         "delivery_fee": 5.00, "min_order": 15.0, "est_delivery_min": 25, "rating": 4.9,
         "lat": -23.5475, "lng": -46.6361,
+        "address": "Rua da Consolação, 3000 - Cerqueira César, São Paulo/SP",
         "products": [
             ("Açaí 500ml", "Açaí puro + 3 acompanhamentos", 22.90,
              "https://images.unsplash.com/photo-1590301157890-4810ed352733?w=600&q=80", "Açaí"),
@@ -1753,6 +1757,13 @@ async def seed_data():
         {"email": "cliente@zappyfood.com"},
         {"$set": {"role": "cliente", "active_role": "cliente"}},
     )
+    # Backfill de endereço nas lojas demo (para exibição no painel)
+    for _s in DEMO_STORES:
+        if _s.get("address"):
+            await db.stores.update_one(
+                {"fantasy_name": _s["fantasy_name"], "address_text": {"$in": [None, ""]}},
+                {"$set": {"address_text": _s["address"]}},
+            )
     if await db.stores.count_documents({}) > 0:
         return
     # Demo lojista
@@ -1779,6 +1790,7 @@ async def seed_data():
             "rating": s["rating"], "num_reviews": 42,
             "status": "ABERTA", "phone": "1130000000",
             "lat": s["lat"], "lng": s["lng"],
+            "address_text": s.get("address", ""),
             "base_delivery_fee": s["delivery_fee"], "price_per_km": 1.5,
             "min_delivery_fee": s["delivery_fee"], "max_radius_km": 8.0, "free_above": 0.0,
             "subscription": {"plan": "monthly", "status": "ATIVA"},

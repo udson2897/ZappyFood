@@ -28,7 +28,7 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     fantasy_name: "", category: "", description: "", phone: "",
-    cnpj: "", pix_key: "",
+    cnpj: "", pix_key: "", address_text: "",
     delivery_fee: "", est_delivery_min: "", banner_url: "", logo_url: "",
     base_delivery_fee: "", price_per_km: "", max_radius_km: "", free_above: "",
     lat: null as number | null, lng: null as number | null,
@@ -49,6 +49,7 @@ export default function Settings() {
           phone: s.phone || "",
           cnpj: s.cnpj || "",
           pix_key: s.pix_key || "",
+          address_text: s.address_text || "",
           delivery_fee: String(s.delivery_fee ?? ""),
           est_delivery_min: String(s.est_delivery_min ?? ""),
           banner_url: s.banner_url || "",
@@ -78,6 +79,20 @@ export default function Settings() {
     try {
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       setForm((f) => ({ ...f, lat: pos.coords.latitude, lng: pos.coords.longitude }));
+      // Best-effort: preenche o endereço em texto a partir das coordenadas
+      try {
+        const geo = await Location.reverseGeocodeAsync({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+        const g = geo?.[0];
+        if (g) {
+          const parts = [
+            [g.street, g.streetNumber].filter(Boolean).join(", "),
+            g.district || g.subregion,
+            [g.city, g.region].filter(Boolean).join("/"),
+          ].filter(Boolean);
+          const addr = parts.join(" - ");
+          if (addr) setForm((f) => ({ ...f, address_text: f.address_text || addr }));
+        }
+      } catch {}
     } catch {} finally {
       setGpsLoading(false);
     }
@@ -99,6 +114,7 @@ export default function Settings() {
         phone: form.phone,
         cnpj: form.cnpj,
         pix_key: form.pix_key,
+        address_text: form.address_text,
         delivery_fee: base,
         est_delivery_min: parseInt(form.est_delivery_min) || 30,
         min_order: 0,
@@ -166,6 +182,7 @@ export default function Settings() {
           <Field label="Chave Pix (para receber pagamentos)" value={form.pix_key} onChange={(t: string) => setForm({ ...form, pix_key: t })} testID="store-pix" />
           <Field label="Descrição" value={form.description} onChange={(t: string) => setForm({ ...form, description: t })} testID="store-desc" />
           <Field label="Telefone / WhatsApp" value={form.phone} onChange={(t: string) => setForm({ ...form, phone: t })} testID="store-phone" keyboardType="phone-pad" />
+          <Field label="Endereço da loja" value={form.address_text} onChange={(t: string) => setForm({ ...form, address_text: t })} testID="store-address" />
           <Field label="Tempo estimado base (min)" value={form.est_delivery_min} onChange={(t: string) => setForm({ ...form, est_delivery_min: t })} testID="store-time" keyboardType="number-pad" />
           <ImageUpload label="Banner da loja" value={form.banner_url} onChange={(url) => setForm({ ...form, banner_url: url })} aspect={[16, 9]} height={150} testID="store-banner" />
           <ImageUpload label="Logo da loja" value={form.logo_url} onChange={(url) => setForm({ ...form, logo_url: url })} aspect={[1, 1]} height={110} round testID="store-logo" />
