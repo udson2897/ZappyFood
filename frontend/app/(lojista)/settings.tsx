@@ -28,7 +28,7 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     fantasy_name: "", category: "", description: "", phone: "",
-    cnpj: "", pix_key: "", address_text: "", cep: "",
+    cnpj: "", pix_key: "", address_text: "", cep: "", address_number: "", address_complement: "",
     delivery_fee: "", est_delivery_min: "", banner_url: "", logo_url: "",
     base_delivery_fee: "", price_per_km: "", max_radius_km: "", free_above: "",
     lat: null as number | null, lng: null as number | null,
@@ -53,6 +53,8 @@ export default function Settings() {
           pix_key: s.pix_key || "",
           address_text: s.address_text || "",
           cep: s.cep || "",
+          address_number: s.address_number || "",
+          address_complement: s.address_complement || "",
           delivery_fee: String(s.delivery_fee ?? ""),
           est_delivery_min: String(s.est_delivery_min ?? ""),
           banner_url: s.banner_url || "",
@@ -147,6 +149,8 @@ export default function Settings() {
         pix_key: form.pix_key,
         address_text: form.address_text,
         cep: form.cep,
+        address_number: form.address_number,
+        address_complement: form.address_complement,
         delivery_fee: base,
         est_delivery_min: parseInt(form.est_delivery_min) || 30,
         min_order: 0,
@@ -232,6 +236,14 @@ export default function Settings() {
             {cepError ? <Text style={styles.cepError}>{cepError}</Text> : <Text style={styles.cepHint}>Digite o CEP para preencher o endereço automaticamente.</Text>}
           </View>
           <Field label="Endereço da loja" value={form.address_text} onChange={(t: string) => setForm({ ...form, address_text: t })} testID="store-address" />
+          <View style={{ flexDirection: "row", gap: spacing.md }}>
+            <View style={{ width: 110 }}>
+              <Field label="Número" value={form.address_number} onChange={(t: string) => setForm({ ...form, address_number: t })} testID="store-number" keyboardType="number-pad" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Field label="Complemento" value={form.address_complement} onChange={(t: string) => setForm({ ...form, address_complement: t })} testID="store-complement" />
+            </View>
+          </View>
           <Field label="Tempo estimado base (min)" value={form.est_delivery_min} onChange={(t: string) => setForm({ ...form, est_delivery_min: t })} testID="store-time" keyboardType="number-pad" />
           <ImageUpload label="Banner da loja" value={form.banner_url} onChange={(url) => setForm({ ...form, banner_url: url })} aspect={[16, 9]} height={150} testID="store-banner" />
           <ImageUpload label="Logo da loja" value={form.logo_url} onChange={(url) => setForm({ ...form, logo_url: url })} aspect={[1, 1]} height={110} round testID="store-logo" />

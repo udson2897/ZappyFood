@@ -245,6 +245,8 @@ class StoreIn(BaseModel):
     pix_key: Optional[str] = ""
     cep: Optional[str] = ""
     address_text: Optional[str] = ""
+    address_number: Optional[str] = ""
+    address_complement: Optional[str] = ""
     phone: Optional[str] = ""
     category: str  # e.g., Hamburgueria, Pizzaria
     description: Optional[str] = ""

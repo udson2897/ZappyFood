@@ -61,7 +61,11 @@ export default function Dashboard() {
           {data.store.address_text ? (
             <View style={styles.addrRow}>
               <Ionicons name="location-outline" size={14} color={colors.onSurfaceSecondary} />
-              <Text style={styles.addrText} numberOfLines={2}>{data.store.address_text}</Text>
+              <Text style={styles.addrText} numberOfLines={2}>
+                {data.store.address_text}
+                {data.store.address_number ? `, nº ${data.store.address_number}` : ""}
+                {data.store.address_complement ? ` - ${data.store.address_complement}` : ""}
+              </Text>
             </View>
           ) : (
             <Pressable style={styles.addrRow} onPress={() => router.push("/(lojista)/settings")} testID="dash-add-address">
