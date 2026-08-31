@@ -243,6 +243,7 @@ class StoreIn(BaseModel):
     fantasy_name: str
     cnpj: Optional[str] = ""
     pix_key: Optional[str] = ""
+    cep: Optional[str] = ""
     address_text: Optional[str] = ""
     phone: Optional[str] = ""
     category: str  # e.g., Hamburgueria, Pizzaria

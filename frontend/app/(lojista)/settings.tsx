@@ -9,7 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { colors, spacing, radius, font, registerThemedStyles } from "@/src/theme";
 import { useTheme } from "@/src/theme-context";
-import { api } from "@/src/lib/api";
+import { api, lookupCep } from "@/src/lib/api";
 import { useAuth } from "@/src/auth/AuthContext";
 import ImageUpload from "@/src/components/ImageUpload";
 
@@ -28,12 +28,14 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     fantasy_name: "", category: "", description: "", phone: "",
-    cnpj: "", pix_key: "", address_text: "",
+    cnpj: "", pix_key: "", address_text: "", cep: "",
     delivery_fee: "", est_delivery_min: "", banner_url: "", logo_url: "",
     base_delivery_fee: "", price_per_km: "", max_radius_km: "", free_above: "",
     lat: null as number | null, lng: null as number | null,
   });
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState<string | null>(null);
   const [pricingMode, setPricingMode] = useState<"per_km" | "bands">("per_km");
   const [bands, setBands] = useState<{ max_km: string; fee: string }[]>([]);
 
@@ -50,6 +52,7 @@ export default function Settings() {
           cnpj: s.cnpj || "",
           pix_key: s.pix_key || "",
           address_text: s.address_text || "",
+          cep: s.cep || "",
           delivery_fee: String(s.delivery_fee ?? ""),
           est_delivery_min: String(s.est_delivery_min ?? ""),
           banner_url: s.banner_url || "",
@@ -71,6 +74,34 @@ export default function Settings() {
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const onCepChange = async (raw: string) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 8);
+    const masked = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+    setForm((f) => ({ ...f, cep: masked }));
+    setCepError(null);
+    if (digits.length === 8) {
+      setCepLoading(true);
+      try {
+        const d = await lookupCep(digits);
+        const addr = [
+          d.street,
+          d.neighborhood,
+          [d.city, d.state].filter(Boolean).join("/"),
+        ].filter(Boolean).join(" - ");
+        setForm((f) => ({
+          ...f,
+          address_text: addr || f.address_text,
+          lat: d.lat ?? f.lat,
+          lng: d.lng ?? f.lng,
+        }));
+      } catch (e: any) {
+        setCepError(e?.message || "CEP não encontrado");
+      } finally {
+        setCepLoading(false);
+      }
+    }
+  };
 
   const useStoreGps = async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
@@ -115,6 +146,7 @@ export default function Settings() {
         cnpj: form.cnpj,
         pix_key: form.pix_key,
         address_text: form.address_text,
+        cep: form.cep,
         delivery_fee: base,
         est_delivery_min: parseInt(form.est_delivery_min) || 30,
         min_order: 0,
@@ -182,6 +214,23 @@ export default function Settings() {
           <Field label="Chave Pix (para receber pagamentos)" value={form.pix_key} onChange={(t: string) => setForm({ ...form, pix_key: t })} testID="store-pix" />
           <Field label="Descrição" value={form.description} onChange={(t: string) => setForm({ ...form, description: t })} testID="store-desc" />
           <Field label="Telefone / WhatsApp" value={form.phone} onChange={(t: string) => setForm({ ...form, phone: t })} testID="store-phone" keyboardType="phone-pad" />
+          <View style={{ marginBottom: spacing.md }}>
+            <Text style={styles.label}>CEP</Text>
+            <View style={styles.cepRow}>
+              <TextInput
+                testID="store-cep"
+                style={[styles.input, { flex: 1 }]}
+                value={form.cep}
+                onChangeText={onCepChange}
+                keyboardType="number-pad"
+                placeholder="00000-000"
+                placeholderTextColor={colors.onSurfaceTertiary}
+                maxLength={9}
+              />
+              {cepLoading && <ActivityIndicator color={colors.brand} style={{ marginLeft: spacing.sm }} />}
+            </View>
+            {cepError ? <Text style={styles.cepError}>{cepError}</Text> : <Text style={styles.cepHint}>Digite o CEP para preencher o endereço automaticamente.</Text>}
+          </View>
           <Field label="Endereço da loja" value={form.address_text} onChange={(t: string) => setForm({ ...form, address_text: t })} testID="store-address" />
           <Field label="Tempo estimado base (min)" value={form.est_delivery_min} onChange={(t: string) => setForm({ ...form, est_delivery_min: t })} testID="store-time" keyboardType="number-pad" />
           <ImageUpload label="Banner da loja" value={form.banner_url} onChange={(url) => setForm({ ...form, banner_url: url })} aspect={[16, 9]} height={150} testID="store-banner" />
@@ -331,6 +380,9 @@ const makeStyles = () => StyleSheet.create({
   statusChip: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
   statusChipText: { color: colors.onSurface, fontWeight: "600" },
   label: { color: colors.onSurfaceSecondary, fontWeight: "600", marginBottom: spacing.xs, fontSize: font.size.sm },
+  cepRow: { flexDirection: "row", alignItems: "center" },
+  cepHint: { color: colors.onSurfaceTertiary, fontSize: font.size.sm, marginTop: 4 },
+  cepError: { color: colors.error, fontSize: font.size.sm, marginTop: 4 },
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, color: colors.onSurface, backgroundColor: colors.surfaceSecondary, fontSize: font.size.lg },
   saveBtn: { backgroundColor: colors.brand, borderRadius: radius.md, paddingVertical: spacing.lg, alignItems: "center", marginTop: spacing.md },
   saveText: { color: "#fff", fontWeight: "800", fontSize: font.size.lg },
